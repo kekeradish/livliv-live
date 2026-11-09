@@ -27,10 +27,6 @@
   "files": [
     "dist",
     "README.md",
-    "API.md",
-    "CHANGELOG.md",
-    "FORMAT.md",
-    "FORMAT-v3.md",
     "schema",
     "LICENSE",
     "NOTICE"

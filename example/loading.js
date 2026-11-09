@@ -56,8 +56,7 @@ export function needWebGL(Player) {
 }
 
 /** When the browser takes the page's graphics away (a phone reclaiming memory, say), the character is gone from this canvas
- *  for good. These pages say so and offer to start again; a page of your own can make a new canvas and a new player at once:
- *  see "When the context is lost" in API.md. */
+ *  for good. These pages say so and offer to start again; a page of your own can make a new canvas and a new player at once. */
 export function watchContext(player) {
   player.onContextLost = () => {
     const note = document.createElement('button')
