@@ -4,19 +4,11 @@
 
 ## 截图
 
-直播控制台：选角色、表情、背景，复制开播地址或直接开播（角色 Nana / `d03ft`）。
+形象窗本体：透明、无边框、无 UI，摆在屏幕任意位置就行；棋盘格表示透明区域，OBS 窗口采集勾「允许透明度」后看到的就是这块画面（角色 Kujira Q / `p02`）。
 
-![直播控制台](docs/console.png)
+![形象窗](docs/window.png)
 
-透明形象窗叠在画面上的效果——左侧留给游戏或幻灯片，右侧是形象，OBS 里勾「允许透明度」即可（角色 Kujira Q / `p02`）。
-
-![透明形象叠加](docs/overlay.png)
-
-角色墙：21 个精选角色，点一个进入控制台。
-
-![角色墙](docs/gallery.png)
-
-截图里出现的角色按 [characters/CREDITS.md](characters/CREDITS.md) 署名，许可说明见文末。
+截图里的角色按 [characters/CREDITS.md](characters/CREDITS.md) 署名，许可说明见文末。
 
 ## 能做什么
 
