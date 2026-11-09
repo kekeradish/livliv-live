@@ -3,10 +3,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LivLiv Live</title>
-<!-- @mediapipe/tasks-vision, used only when ?cam=1 (face tracking) -->
-<script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
+<!-- @mediapipe/tasks-vision, used only when ?cam=1 (face tracking); three and three-vrm only for ?vrm= -->
+<script type="importmap">{ "imports": {
+  "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs",
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+  "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/",
+  "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"
+} }</script>
 <!-- Clean full-screen character for OBS / a stream overlay. Configure it on live-console.html, or by URL:
      ?model=<id | path>                        character id (e.g. v05) or a path (.livliv / folder). Default d03ft
+     ?vrm=<file in avatars/>                   your own VRM (VRoid Studio and others); ?png=<folder in avatars/> a PNGTuber
+     keys 1..5                                 nod, shake, tilt, hop, shy
      ?bg=transparent|dark|checker|#rrggbb      background. Default transparent (overlay); checker shows the cut-out
      ?cam=1&mirror=0|1&smooth=0..1&follow=0..2 face tracking from the webcam
      ?mic=1                                    lip sync from the microphone
@@ -35,6 +42,10 @@
   import { Player } from '../dist/index.js'
 
   const q = new URLSearchParams(location.search)
+  const vrm = q.get('vrm')
+  const png = q.get('png')
+  const kind = vrm ? 'vrm' : png ? 'png' : 'livliv'
+  const ACTS = ['nod', 'shake', 'tilt', 'hop', 'shy']
   const bg = q.get('bg')
   if (bg && bg !== 'transparent') {
     if (bg === 'dark') document.documentElement.style.background = '#20222b'
@@ -59,6 +70,7 @@
     peekFs()
   }
   addEventListener('keydown', (e) => {
+    if (/^[1-5]$/.test(e.key)) { player?.act(ACTS[+e.key - 1]); return }
     if (q.get('pet') === '1' || (e.key !== 'f' && e.key !== 'F')) return
     if (document.fullscreenElement) document.exitFullscreen()
     else document.documentElement.requestFullscreen?.()
@@ -83,29 +95,63 @@
     if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return '没找到设备'
     if (n === 'NotReadableError' || n === 'AbortError' || n === 'TrackStartError') return '设备被别的程序占用了（OBS、剪映、直播伴侣等），先关掉它们'
     if (/face_landmarker|cdn\.jsdelivr|storage\.googleapis|Failed to fetch/i.test(e?.message || '')) return '面部模型下载失败，检查网络后重开'
+    if (/three|pixiv/i.test(e?.message || '')) return 'VRM 需要的 3D 库没下载下来，检查网络后重开'
     return e?.message || String(e)
   }
 
-  if (!Player.isSupported()) { fail('这个浏览器不支持 WebGL2，无法显示角色。'); throw new Error('no WebGL2') }
-
   const canvas = document.getElementById('stage')
-  const player = new Player(canvas, { followPointer: false })   // eyes stay put: clean for a stream
+  let player
+  if (kind === 'livliv') {
+    if (!Player.isSupported()) { fail('这个浏览器不支持 WebGL2，无法显示角色。'); throw new Error('no WebGL2') }
+    player = new Player(canvas, { followPointer: false })   // eyes stay put: clean for a stream
+  } else {
+    const { BodyPlayer } = await import('../dist/body.js')
+    if (kind === 'vrm') {
+      if (!Player.isSupported()) { fail('这个浏览器不支持 WebGL2，无法显示 VRM。'); throw new Error('no WebGL2') }
+      const { VrmBody } = await import('../dist/vrm.js')
+      player = new BodyPlayer(canvas, new VrmBody(), { followPointer: false })
+    } else {
+      const { PngBody } = await import('../dist/png.js')
+      player = new BodyPlayer(canvas, new PngBody(), { followPointer: false })
+    }
+  }
   window.player = player
 
-  const asked = q.get('model') || 'd03ft'
-  const source = asked.includes('/') || asked.endsWith('.livliv') ? asked : `../characters/${asked}/`
-  const loadWithFallback = async (s) => {
-    try { return await player.load(s) }
-    catch (e) { if (typeof s === 'string' && s.endsWith('.livliv')) return player.load(s.replace(/\.livliv$/, '/')); throw e }
+  // a PNGTuber folder: its pictures, as avatars.json lists them (closed/open are required by the player)
+  const pngSource = async (id) => {
+    const list = await fetch('../avatars.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    const found = list?.png?.find((c) => c.id === id)
+    const base = `../avatars/${encodeURIComponent(id)}/`
+    const source = {}
+    for (const f of found?.files || ['closed.png', 'open.png']) source[f === 'name.txt' ? f : f.replace(/\.[^.]*$/, '')] = base + encodeURIComponent(f)
+    return source
   }
-  try { window.model = await loadWithFallback(source) }
-  catch (e) { fail(`角色加载失败：${e.message}`); throw e }
+
+  const progress = (p) => { if (p.step === 'download' && p.progress > 0 && p.progress < 1) note(`download ${Math.round(p.progress * 100)}%`) }
+  try {
+    if (kind === 'vrm') window.model = await player.load(`../avatars/${encodeURIComponent(vrm)}`, { onProgress: progress })
+    else if (kind === 'png') window.model = await player.load(await pngSource(png), { onProgress: progress })
+    else {
+      const asked = q.get('model') || 'd03ft'
+      const source = asked.includes('/') || asked.endsWith('.livliv') ? asked : `../characters/${asked}/`
+      window.model = await player.load(source)
+        .catch((e) => { if (typeof source === 'string' && source.endsWith('.livliv')) return player.load(source.replace(/\.livliv$/, '/')); throw e })
+    }
+  } catch (e) { fail(`角色加载失败：${e.message}`); throw e }
 
   if (q.get('mark') === '0') player.mark?.set('none', null)   // page-level only; the character files stay untouched
   if (q.get('expr')) {
     if (!player.setExpression(q.get('expr'))) console.warn('LivLiv live: no such expression:', q.get('expr'))
   }
   document.title = `LivLiv Live · ${window.model.name}`
+
+  // actions: keys 1..5 here, the console's buttons through BroadcastChannel, the tray through window.livliv
+  const act = (a) => { if (ACTS.includes(a)) player.act(a) }
+  window.livliv = { act, expression: (id) => player.setExpression(id || null) }
+  try {
+    const bus = new BroadcastChannel('livliv-live')
+    bus.onmessage = (e) => { if (e.data?.type === 'livliv-act') act(e.data.action) }
+  } catch {}
 
   const num = (k, d) => (q.has(k) && q.get(k) !== '' && !isNaN(+q.get(k)) ? +q.get(k) : d)
 

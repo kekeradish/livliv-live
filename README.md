@@ -4,6 +4,8 @@
 
 ## 能做什么
 
+- 自带上自己的角色：`avatars/` 里放 `.vrm`（VRoid 等）或一张张嘴/闭嘴的 PNG 图片，控制台和托盘里直接选
+- 动作：点头、摇头、歪头、跳一下、害羞（托盘菜单、控制台按钮，或直播页按 `1`–`5`）
 - 透明、无边框、无 UI 的形象窗口；OBS 窗口采集勾「允许透明度」即为真透明叠加
 - 摄像头面部追踪：转头、点头、歪头、眨眼、眼神、嘴型、微笑
 - 麦克风实时口型；摄像头被别的程序占用时自动重试并提示
@@ -39,6 +41,8 @@
 | 参数 | 说明 |
 |---|---|
 | `model=<id 或 路径>` | 角色 id（如 `p02`）或模型文件夹 / `.livliv` 地址；默认 `d03ft` |
+| `vrm=<文件>` | `avatars/` 里的 `.vrm` 文件，例如 `vrm=me.vrm` |
+| `png=<文件夹>` | `avatars/` 里的 PNGTuber 文件夹，例如 `png=小鱼` |
 | `bg=transparent\|dark\|checker\|#rrggbb` | 背景；默认透明，`#00ff00` 可配合 OBS 色度键 |
 | `cam=1`、`mirror=0\|1`、`smooth=0..1`、`follow=0..2` | 摄像头面捕与手感 |
 | `mic=1` | 麦克风实时口型 |
@@ -46,7 +50,19 @@
 | `mark=0` | 页面层隐藏角色右下角 LivLiv 角标（不改角色文件，署名义务仍在） |
 | `cursor=0` | 隐藏鼠标指针 |
 
-按 `F` 全屏（形象窗模式除外）。
+按 `F` 全屏（形象窗模式除外）。直播页按 `1`–`5` 做动作：点头、摇头、歪头、跳一下、害羞；控制台里的动作按钮也能远程触发。
+
+## 用自己的角色
+
+把文件放进 `player/avatars/`，然后托盘 →「重新加载」，或在控制台刷新页面：
+
+- **VRM（3D）**：直接放 `xxx.vrm`。VRoid Studio 导出的文件即可；需要联网加载 three.js（jsDelivr）。
+- **PNGTuber（2D 图片）**：建一个子文件夹（名字随意），里面放
+  `closed.png`（闭嘴）、`open.png`（张嘴），可选 `blink.png`（闭眼）、`blink-open.png`（闭眼张嘴）、`name.txt`（名字）。jpg / webp 也可以，文件名要对上。
+- Live2D（`.model3.json`）不支持。用别人的模型前先确认许可允许直播使用。
+- `avatars/` 里的内容不会同步到 GitHub（已加入 `.gitignore`）。
+
+自己的 VRM 没有 LivLiv 的角色许可限制，适合当作频道长期形象；精选角色仍需按许可署名。
 
 ## OBS 的三种用法
 
@@ -62,8 +78,9 @@
 
 ## 相对上游的改动
 
-- 新增 `example/live.html`、`example/live-console.html`
-- 新增 `desktop/`：Electron 透明窗口 + 托盘；`直播形象.cmd` 一键启动
+- 新增 `example/live.html`、`example/live-console.html`（支持精选角色、VRM、PNGTuber）
+- 新增 `avatars/`：放自己的 `.vrm` / PNGTuber 图片，服务器提供 `avatars.json` 列表
+- 新增 `desktop/`：Electron 透明窗口 + 托盘（角色、表情、动作、摄像头、麦克风）；`直播形象.cmd` 一键启动
 - 新增 `serve.mjs`：零依赖静态服务器；`启动直播浏览器.cmd` 专用 Chrome 配置
 - `example/gallery.html`、`example/demo.html` 增加「直播控制台」入口
 - 隐藏角标仅在页面层（`mark=0`），`characters/` 里的角色文件未做任何修改
@@ -72,6 +89,7 @@
 
 ```
 characters/          21 个角色（模型、贴图、许可）
+avatars/             你自己的角色（.vrm / PNGTuber，不同步到 GitHub）
 dist/                构建产物（已提交，克隆即可运行）
 src/                 播放器源码
 example/             示例页与直播页

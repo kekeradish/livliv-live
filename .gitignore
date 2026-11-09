@@ -9,3 +9,6 @@ example/model/
 characters/*.livliv
 # MediaPipe files, if you host the face model locally
 mediapipe/
+# your own characters (they stay on your machine; keep the note)
+avatars/*
+!avatars/说明.txt

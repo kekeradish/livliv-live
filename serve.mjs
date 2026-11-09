@@ -34,12 +34,43 @@ const MIME = {
   '.md': 'text/plain; charset=utf-8',
 }
 
+// the characters in avatars/: a .vrm file, or a folder of PNGTuber pictures (closed, open, blink, blink-open, name.txt)
+function avatars() {
+  const dir = path.join(root, 'avatars')
+  const out = { vrm: [], png: [] }
+  let entries = []
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
+  const IMG = /\.(png|jpe?g|webp|gif|avif)$/i
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (e.isFile() && /\.vrm$/i.test(e.name)) {
+      out.vrm.push({ id: e.name, name: e.name.replace(/\.vrm$/i, '') })
+      continue
+    }
+    if (!e.isDirectory() || /^[._]/.test(e.name)) continue
+    let files = []
+    try { files = fs.readdirSync(path.join(dir, e.name)) } catch { continue }
+    const imgs = files.filter((f) => IMG.test(f) && !f.startsWith('.'))
+    const slot = (s) => imgs.find((f) => f.replace(/\.[^.]*$/, '').toLowerCase() === s)
+    if (!slot('closed') || !slot('open')) continue
+    let name = e.name
+    try { name = fs.readFileSync(path.join(dir, e.name, 'name.txt'), 'utf8').trim().slice(0, 60) || name } catch {}
+    out.png.push({ id: e.name, name, files: [...['closed', 'open', 'blink', 'blink-open'].map(slot).filter(Boolean), ...(files.includes('name.txt') ? ['name.txt'] : [])] })
+  }
+  return out
+}
+
 const server = http.createServer((req, res) => {
   let urlPath
   try { urlPath = decodeURIComponent(new URL(req.url, `http://${host}`).pathname) }
   catch { res.writeHead(400).end('Bad request'); return }
 
   if (urlPath === '/') { res.writeHead(302, { Location: '/example/demo.html' }).end(); return }
+
+  if (urlPath === '/avatars.json') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' })
+    res.end(JSON.stringify(avatars()))
+    return
+  }
 
   const filePath = path.normalize(path.join(root, urlPath))
   if (filePath !== root && !filePath.startsWith(root + path.sep)) { res.writeHead(403).end('Forbidden'); return }

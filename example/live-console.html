@@ -3,7 +3,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LivLiv 直播控制台</title>
-<script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
+<script type="importmap">{ "imports": {
+  "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs",
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+  "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/",
+  "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"
+} }</script>
 <style>
   :root { color-scheme: dark }
   * { box-sizing: border-box }
@@ -27,6 +32,8 @@
   .chk input { width: 16px; height: 16px }
   #go { margin-top: auto; padding: 12px; border: 0; border-radius: 10px; background: #ff4d5e; color: #fff;
         font: 600 15px/1 system-ui, sans-serif; cursor: pointer }
+  #acts button { padding: 7px 9px; border: 1px solid #ffffff26; border-radius: 8px; background: #1c1f27; color: inherit;
+                 font: 12px system-ui, sans-serif; cursor: pointer }
   .hint { font-size: 12px; line-height: 1.5; opacity: .6; margin: 0 }
   @media (max-width: 760px) { #app { grid-template-columns: 1fr; grid-template-rows: 1fr auto } #panel { border-left: 0; border-top: 1px solid #ffffff18 } }
 </style>
@@ -42,6 +49,10 @@
     <div>
       <label for="expr">表情</label>
       <select id="expr"><option value="">无（默认）</option></select>
+    </div>
+    <div>
+      <label>动作</label>
+      <div id="acts" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <div>
       <label for="bg">背景</label>
@@ -97,39 +108,102 @@
   import { loadWithFallback, needWebGL, watchContext } from './loading.js'
 
   const $ = (id) => document.getElementById(id)
-  const status = $('status'), canvas = $('stage')
+  const status = $('status')
+  const q = new URLSearchParams(location.search)
 
   needWebGL(Player)
-  const player = new Player(canvas, { followPointer: false })
-  window.player = player
-  watchContext(player)
+  let player = null
 
-  // the featured characters
+  // the featured characters, and the ones in avatars/ (.vrm files and PNGTuber folders)
   const list = await (await fetch('../characters/index.json')).json()
+  const avatars = await fetch('../avatars.json')
+    .then((r) => (r.ok ? r.json() : { vrm: [], png: [] })).catch(() => ({ vrm: [], png: [] }))
   const sel = $('model')
   const twins = new Set(list.filter((c) => list.filter((o) => o.name === c.name).length > 1).map((c) => c.name))
+  const addGroup = (label, entries) => {
+    if (!entries.length) return null
+    const g = document.createElement('optgroup')
+    g.label = label
+    sel.append(g)
+    return g
+  }
+  const gFeatured = addGroup('精选角色', list)
   for (const c of list) {
     const o = document.createElement('option')
     o.value = c.id
     o.textContent = twins.has(c.name) ? `${c.name} · ${c.id}` : c.name
-    sel.append(o)
+    ;(gFeatured ?? sel).append(o)
   }
-  sel.value = 'd03ft'
-  const q = new URLSearchParams(location.search)
-  const want = q.get('model')
-  if (want && list.some((c) => c.id === want)) sel.value = want
+  const gMine = addGroup('我的角色', [...avatars.vrm, ...avatars.png])
+  for (const c of avatars.vrm) {
+    const o = document.createElement('option')
+    o.value = `vrm:${c.id}`
+    o.textContent = c.name
+    ;(gMine ?? sel).append(o)
+  }
+  for (const c of avatars.png) {
+    const o = document.createElement('option')
+    o.value = `png:${c.id}`
+    o.textContent = `${c.name}（PNGTuber）`
+    ;(gMine ?? sel).append(o)
+  }
 
-  async function show(id) {
+  const kindOf = (value) => value.startsWith('vrm:') ? 'vrm' : value.startsWith('png:') ? 'png' : 'livliv'
+  sel.value = 'd03ft'
+  const want = q.get('model')
+  if (want && [...sel.options].some((o) => o.value === want)) sel.value = want
+
+  // a new character of another kind needs a fresh canvas (a PNGTuber draws in 2D); the camera and mic follow it over
+  async function mount(kind, me) {
+    face?.stop(); face = null
+    mic?.stop(); mic = null
+    let BodyClass = null, body = null
+    if (kind !== 'livliv') {
+      BodyClass = (await import('../dist/body.js')).BodyPlayer
+      body = kind === 'vrm' ? new (await import('../dist/vrm.js')).VrmBody() : new (await import('../dist/png.js')).PngBody()
+      if (me !== token) return   // another character was picked while the modules came
+    }
+    try { player?.dispose?.({ release: true }) } catch {}
+    const old = $('stage')
+    const canvas = old.cloneNode(false)
+    canvas.removeAttribute('width'); canvas.removeAttribute('height')
+    old.replaceWith(canvas)
+    player = kind === 'livliv' ? new Player(canvas, { followPointer: false }) : new BodyClass(canvas, body, { followPointer: false })
+    window.player = player
+    watchContext(player)
+  }
+
+  let token = 0
+  async function show(value) {
+    const me = ++token
+    const kind = kindOf(value)
     status.textContent = '加载中…'
+    const onProgress = (p) => { if (me === token && p.step === 'download' && p.progress > 0 && p.progress < 1) status.textContent = `加载… ${Math.round(p.progress * 100)}%` }
     try {
-      window.model = await loadWithFallback(player, `../characters/${id}.livliv`, {
-        onProgress: (p) => { if (p.step === 'download') status.textContent = `加载… ${Math.round((p.progress || 0) * 100)}%` },
-      })
+      await mount(kind, me)
+      if (me !== token) return
+      if (kind === 'livliv') {
+        window.model = await loadWithFallback(player, `../characters/${value}.livliv`, { onProgress })
+      } else if (kind === 'vrm') {
+        window.model = await player.load(`../avatars/${encodeURIComponent(value.slice(4))}`, { onProgress })
+      } else {
+        const id = value.slice(4)
+        const entry = avatars.png.find((c) => c.id === id)
+        const base = `../avatars/${encodeURIComponent(id)}/`
+        const source = Object.fromEntries((entry?.files || ['closed.png', 'open.png'])
+          .map((f) => [f === 'name.txt' ? f : f.replace(/\.[^.]*$/, ''), base + encodeURIComponent(f)]))
+        window.model = await player.load(source, { onProgress })
+      }
+      if (me !== token) return
       applyMark()
       fillExprs()
       if (exprSel.value) player.setExpression(exprSel.value)
       status.textContent = `${window.model.name} · 就绪`
-    } catch (e) { status.textContent = `加载失败：${e.message}` }
+      if (camEl.checked) startCam()
+      if (micEl.checked) startMic()
+    } catch (e) {
+      if (me === token) status.textContent = `加载失败：${e.message}`
+    }
   }
   sel.onchange = () => { show(sel.value); updDemoLink() }
 
@@ -138,6 +212,8 @@
   function applyMark() {
     const info = window.model
     if (!info) return
+    markEl.disabled = !player.mark   // a VRM or PNGTuber has no LivLiv mark
+    if (!player.mark) return
     if (markEl.checked) return player.mark.set('none', null)
     const kind = info.meta ? info.meta.watermark?.kind ?? 'none' : info.watermark === 'LivLiv' ? 'livliv' : info.watermark ? 'text' : 'none'
     player.mark.set(kind, info.watermark ?? null, info.meta?.watermark?.center !== false)
@@ -161,8 +237,27 @@
     player.setExpression(exprSel.value || null)
     status.textContent = exprSel.value ? `表情：${exprSel.selectedOptions[0].textContent}` : '表情：默认'
   }
+
+  // actions: here on the preview, and on the live window (the console broadcasts them; the live page also has keys 1..5)
+  const ACT_LABELS = { nod: '点头 1', shake: '摇头 2', tilt: '歪头 3', hop: '跳一下 4', shy: '害羞 5' }
+  let bus = null
+  try { bus = new BroadcastChannel('livliv-live') } catch {}
+  const acts = $('acts')
+  for (const [id, label] of Object.entries(ACT_LABELS)) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = label
+    b.onclick = () => { player.act(id); bus?.postMessage({ type: 'livliv-act', action: id }) }
+    acts.append(b)
+  }
+
   const demoLink = $('demoLink')
-  function updDemoLink() { demoLink.href = `demo.html?model=${encodeURIComponent('../characters/' + sel.value + '/')}` }
+  function updDemoLink() {
+    const v = sel.value
+    if (v.startsWith('vrm:')) { demoLink.href = `vrm.html?model=${encodeURIComponent('../avatars/' + v.slice(4))}`; demoLink.textContent = '用这个 VRM 试表情 / 动作 ↗' }
+    else if (v.startsWith('png:')) { demoLink.href = 'png.html'; demoLink.textContent = 'PNGTuber 换图玩法 ↗' }
+    else { demoLink.href = `demo.html?model=${encodeURIComponent('../characters/' + v + '/')}`; demoLink.textContent = '用这个角色试表情 / 动作 ↗' }
+  }
   updDemoLink()
 
   // camera (face tracking)
@@ -226,7 +321,9 @@
   // open the clean live page with these settings; free the camera/mic first so the new tab can use them
   $('go').onclick = () => {
     const p = new URLSearchParams()
-    p.set('model', sel.value)
+    const kind = kindOf(sel.value)
+    if (kind === 'livliv') p.set('model', sel.value)
+    else p.set(kind, sel.value.slice(4))
     p.set('bg', bgSel.value === 'color' ? bgColor.value : bgSel.value)
     p.set('cursor', '0')
     if (camEl.checked) { p.set('cam', '1'); p.set('mirror', mirrorEl.checked ? '1' : '0'); p.set('smooth', smoothEl.value); p.set('follow', followEl.value) }
@@ -243,8 +340,10 @@
 
   // a browser-source URL: transparent, no camera/mic (OBS's browser source cannot ask for them)
   $('copySrc').onclick = async () => {
-    const p = new URLSearchParams({ model: sel.value, bg: 'transparent' })
-    if (markEl.checked) p.set('mark', '0')
+    const p = new URLSearchParams({ bg: 'transparent' })
+    const kind = kindOf(sel.value)
+    if (kind === 'livliv') { p.set('model', sel.value); if (markEl.checked) p.set('mark', '0') }
+    else p.set(kind, sel.value.slice(4))
     if (exprSel.value) p.set('expr', exprSel.value)
     const url = new URL(`live.html?${p}`, location.href).href
     try { await navigator.clipboard.writeText(url); status.textContent = `已复制：${url}` } catch { status.textContent = url }

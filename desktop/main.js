@@ -34,7 +34,36 @@ function characters() {
   const list = readJson(path.join(ROOT, 'characters', 'index.json')) || []
   return list.map(({ id, name }) => ({ id, name }))
 }
+// avatars/: your own .vrm files, and PNGTuber folders (closed/open pictures, optional name.txt)
+function avatars() {
+  const dir = path.join(ROOT, 'avatars')
+  const out = { vrm: [], png: [] }
+  let entries = []
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
+  const slot = (files, s) => files.find((f) => f.replace(/\.[^.]*$/, '').toLowerCase() === s)
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (e.isFile() && /\.vrm$/i.test(e.name)) {
+      out.vrm.push({ id: `vrm:${e.name}`, name: e.name.replace(/\.vrm$/i, '') })
+      continue
+    }
+    if (!e.isDirectory() || /^[._]/.test(e.name)) continue
+    let files = []
+    try { files = fs.readdirSync(path.join(dir, e.name)) } catch { continue }
+    if (!slot(files, 'closed') || !slot(files, 'open')) continue
+    let name = e.name
+    try { name = fs.readFileSync(path.join(dir, e.name, 'name.txt'), 'utf8').trim().slice(0, 60) || name } catch {}
+    out.png.push({ id: `png:${e.name}`, name })
+  }
+  return out
+}
+// a VRM's expressions are its own file's; the usual five are offered, and one it lacks does nothing
+const VRM_EXPRESSIONS = [
+  { id: 'happy', label: '开心' }, { id: 'angry', label: '生气' }, { id: 'sad', label: '难过' },
+  { id: 'relaxed', label: '放松' }, { id: 'surprised', label: '惊讶' },
+]
 function expressions(id) {
+  if (id.startsWith('vrm:')) return VRM_EXPRESSIONS
+  if (id.startsWith('png:')) return []
   const model = readJson(path.join(ROOT, 'characters', id, 'model.json'))
   const list = Array.isArray(model?.expressions) ? model.expressions : []
   return list.map((e) => ({ id: e.id, label: e.label?.zh || e.label?.['zh-CN'] || e.label?.en || e.id }))
@@ -65,7 +94,10 @@ async function ensureServer() {
 }
 
 function liveUrl() {
-  const p = new URLSearchParams({ model: settings.model, bg: 'transparent', mark: '0', pet: '1' })
+  const p = new URLSearchParams({ bg: 'transparent', mark: '0', pet: '1' })
+  if (settings.model.startsWith('vrm:')) p.set('vrm', settings.model.slice(4))
+  else if (settings.model.startsWith('png:')) p.set('png', settings.model.slice(4))
+  else p.set('model', settings.model)
   if (settings.cam) p.set('cam', '1')
   if (settings.mic) p.set('mic', '1')
   if (settings.expr) p.set('expr', settings.expr)
@@ -123,18 +155,30 @@ function apply(partial) {
 function refreshTray() {
   if (!tray) return
   const chars = characters()
+  const mine = avatars()
+  const myItems = [...mine.vrm, ...mine.png]
+  const pick = (c) => ({
+    label: c.name, type: 'radio', checked: c.id === settings.model,
+    click: () => apply({ model: c.id, expr: '' }),
+  })
   const exprs = expressions(settings.model)
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '显示 / 隐藏', click: () => (win.isVisible() ? win.hide() : win.show()) },
     { type: 'separator' },
-    { label: '角色', submenu: chars.map((c) => ({
-      label: c.name, type: 'radio', checked: c.id === settings.model,
-      click: () => apply({ model: c.id, expr: '' }),
-    })) },
+    { label: '角色', submenu: [
+      { label: '精选角色', submenu: chars.map(pick) },
+      ...(myItems.length ? [{ label: '我的角色', submenu: myItems.map(pick) }] : []),
+    ] },
     { label: '表情', submenu: [
       { label: '无（跟随我的脸）', type: 'radio', checked: !settings.expr, click: () => apply({ expr: '' }) },
       ...exprs.map((e) => ({ label: e.label, type: 'radio', checked: settings.expr === e.id, click: () => apply({ expr: e.id }) })),
     ] },
+    { label: '动作', submenu: [
+      ['nod', '点头'], ['shake', '摇头'], ['tilt', '歪头'], ['hop', '跳一下'], ['shy', '害羞'],
+    ].map(([id, label]) => ({
+      label,
+      click: () => win?.webContents.executeJavaScript(`window.livliv && window.livliv.act(${JSON.stringify(id)})`).catch(() => {}),
+    })) },
     { type: 'separator' },
     { label: '摄像头 · 面部追踪', type: 'checkbox', checked: settings.cam, click: (i) => apply({ cam: i.checked }) },
     { label: '麦克风 · 嘴型同步', type: 'checkbox', checked: settings.mic, click: (i) => apply({ mic: i.checked }) },

@@ -1,0 +1,18 @@
+把你的角色放在这个文件夹里，然后在形象窗托盘里点「重新加载」或刷新控制台页面，就会出现在「我的角色」。
+
+VRM（3D）
+  直接放 .vrm 文件，例如 me.vrm。VRoid Studio 可以导出这种文件。
+
+PNGTuber（2D 图片）
+  新建一个子文件夹，例如 小鱼\，里面放：
+    closed.png      闭嘴
+    open.png        张嘴
+    blink.png       闭眼（可选）
+    blink-open.png  闭眼张嘴（可选）
+    name.txt        显示的名字，一行字（可选）
+  后缀 png / jpg / webp 都行，四个文件的名字要对上。
+
+注意
+  - Live2D（.model3.json）这个播放器不支持，只支持 VRM 和静态图片。
+  - 用别人的模型之前，先确认它的许可允许你直播使用。
+  - 这个文件夹里的东西不会同步到 GitHub（见 .gitignore）。
