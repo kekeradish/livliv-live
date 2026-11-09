@@ -144,8 +144,19 @@ function createWindow() {
   placeWindow()
   win.loadURL(liveUrl())
   // drag anywhere on the character; no UI in pet mode (re-applied after every reload)
+  let navigations = 0
   win.webContents.on('did-finish-load', () => {
+    navigations = 0
     win.webContents.insertCSS('html,body,canvas{-webkit-app-region:drag}')
+  })
+  // the page comes from the local server: if it went away (or never came up), start it and try again
+  win.webContents.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return
+    if (navigations++ >= 2) {
+      dialog.showErrorBox('形象页没有起来', `页面来自 http://127.0.0.1:${PORT}，本地服务没能启动。\n\n请确认已安装 Node.js，然后右键托盘图标 →「重新加载」。`)
+      return
+    }
+    loadLive()
   })
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.on('close', (e) => {
@@ -153,11 +164,24 @@ function createWindow() {
   })
 }
 
-function apply(partial) {
+function apply(partial, reload = true) {
   Object.assign(settings, partial)
   saveSettings()
-  if (win) win.loadURL(liveUrl())
+  if (reload) loadLive()
   refreshTray()
+}
+
+/** the page is served by the local server: bring it back before a reload if it went away */
+async function loadLive() {
+  if (!win) return
+  if (!(await portOpen())) await ensureServer()
+  win.loadURL(liveUrl())
+}
+
+/** expressions change at runtime: no reload, so the picture never blinks out and the camera keeps running */
+function setExpression(id) {
+  apply({ expr: id }, false)
+  win?.webContents.executeJavaScript(`window.livliv && window.livliv.expression(${JSON.stringify(id || null)})`).catch(() => {})
 }
 
 function refreshTray() {
@@ -181,8 +205,8 @@ function refreshTray() {
     ] },
     { label: '打开角色目录（avatars）', click: openAvatars },
     { label: '表情', submenu: [
-      { label: '无（跟随我的脸）', type: 'radio', checked: !settings.expr, click: () => apply({ expr: '' }) },
-      ...exprs.map((e) => ({ label: e.label, type: 'radio', checked: settings.expr === e.id, click: () => apply({ expr: e.id }) })),
+      { label: '无（跟随我的脸）', type: 'radio', checked: !settings.expr, click: () => setExpression('') },
+      ...exprs.map((e) => ({ label: e.label, type: 'radio', checked: settings.expr === e.id, click: () => setExpression(e.id) })),
     ] },
     { label: '动作', submenu: [
       ['nod', '点头'], ['shake', '摇头'], ['tilt', '歪头'], ['hop', '跳一下'], ['shy', '害羞'],
@@ -212,7 +236,7 @@ function refreshTray() {
       detail: '窗口选「LivLiv Live · 角色名」（electron.exe）\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
       buttons: ['知道了'],
     }) },
-    { label: '重新加载', click: () => { refreshTray(); win.loadURL(liveUrl()) } },   // also picks up a new avatars/ file
+    { label: '重新加载', click: () => { refreshTray(); loadLive() } },   // also picks up a new avatars/ file
     { label: '退出', click: () => { quitting = true; app.quit() } },
   ]))
 }
