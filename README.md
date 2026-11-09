@@ -54,7 +54,7 @@
 
 ## 用自己的角色
 
-把文件放进 `player/avatars/`，然后托盘 →「重新加载」，或在控制台刷新页面：
+把文件放进 `player/avatars/`（托盘菜单里有「打开角色目录（avatars）」，放完点「重新加载」；控制台则刷新页面）：
 
 - **VRM（3D）**：直接放 `xxx.vrm`。VRoid Studio 导出的文件即可；需要联网加载 three.js（jsDelivr）。
 - **PNGTuber（2D 图片）**：建一个子文件夹（名字随意），里面放

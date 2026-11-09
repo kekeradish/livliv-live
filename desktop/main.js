@@ -1,6 +1,6 @@
 // LivLiv live avatar: the same live page in a transparent, frameless capture window.
 // OBS: Window Capture this window with "Allow Transparency" (Windows 10 method) and nothing else to set up.
-const { app, BrowserWindow, Tray, Menu, nativeImage, session, screen, dialog, globalShortcut } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, session, screen, dialog, globalShortcut, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const net = require('node:net')
@@ -35,8 +35,13 @@ function characters() {
   return list.map(({ id, name }) => ({ id, name }))
 }
 // avatars/: your own .vrm files, and PNGTuber folders (closed/open pictures, optional name.txt)
+const AVATARS_DIR = path.join(ROOT, 'avatars')
+function openAvatars() {
+  try { fs.mkdirSync(AVATARS_DIR, { recursive: true }) } catch {}
+  shell.openPath(AVATARS_DIR).catch(() => {})
+}
 function avatars() {
-  const dir = path.join(ROOT, 'avatars')
+  const dir = AVATARS_DIR
   const out = { vrm: [], png: [] }
   let entries = []
   try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
@@ -167,8 +172,11 @@ function refreshTray() {
     { type: 'separator' },
     { label: '角色', submenu: [
       { label: '精选角色', submenu: chars.map(pick) },
-      ...(myItems.length ? [{ label: '我的角色', submenu: myItems.map(pick) }] : []),
+      myItems.length
+        ? { label: `我的角色（${myItems.length}）`, submenu: [...myItems.map(pick), { type: 'separator' }, { label: '打开角色目录…', click: openAvatars }] }
+        : { label: '我的角色（空）', submenu: [{ label: '打开 avatars 放模型…', click: openAvatars }] },
     ] },
+    { label: '打开角色目录（avatars）', click: openAvatars },
     { label: '表情', submenu: [
       { label: '无（跟随我的脸）', type: 'radio', checked: !settings.expr, click: () => apply({ expr: '' }) },
       ...exprs.map((e) => ({ label: e.label, type: 'radio', checked: settings.expr === e.id, click: () => apply({ expr: e.id }) })),
