@@ -40,6 +40,9 @@ function openAvatars() {
   try { fs.mkdirSync(AVATARS_DIR, { recursive: true }) } catch {}
   shell.openPath(AVATARS_DIR).catch(() => {})
 }
+function openCharacters() {
+  shell.openPath(path.join(ROOT, 'characters')).catch(() => {})
+}
 function avatars() {
   const dir = AVATARS_DIR
   const out = { vrm: [], png: [] }
@@ -171,7 +174,7 @@ function refreshTray() {
     { label: '显示 / 隐藏', click: () => (win.isVisible() ? win.hide() : win.show()) },
     { type: 'separator' },
     { label: '角色', submenu: [
-      { label: '精选角色', submenu: chars.map(pick) },
+      { label: '精选角色', submenu: [...chars.map(pick), { type: 'separator' }, { label: '打开精选角色目录…', click: openCharacters }] },
       myItems.length
         ? { label: `我的角色（${myItems.length}）`, submenu: [...myItems.map(pick), { type: 'separator' }, { label: '打开角色目录…', click: openAvatars }] }
         : { label: '我的角色（空）', submenu: [{ label: '打开 avatars 放模型…', click: openAvatars }] },
