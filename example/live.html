@@ -137,7 +137,13 @@
       window.model = await player.load(source)
         .catch((e) => { if (typeof source === 'string' && source.endsWith('.livliv')) return player.load(source.replace(/\.livliv$/, '/')); throw e })
     }
-  } catch (e) { fail(`角色加载失败：${e.message}`); throw e }
+  } catch (e) {
+    const hint = kind === 'vrm' ? `avatars/ 里没有 ${vrm}，或者它不是能读取的 VRM`
+      : kind === 'png' ? `avatars/ 里没有「${png}」这个文件夹，或者里面缺 closed / open 图片`
+      : ''
+    fail(`角色加载失败：${hint ? `${hint}（${e.message}）` : e.message}`)
+    throw e
+  }
 
   if (q.get('mark') === '0') player.mark?.set('none', null)   // page-level only; the character files stay untouched
   if (q.get('expr')) {

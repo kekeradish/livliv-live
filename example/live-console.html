@@ -202,7 +202,10 @@
       if (camEl.checked) startCam()
       if (micEl.checked) startMic()
     } catch (e) {
-      if (me === token) status.textContent = `加载失败：${e.message}`
+      const hint = kind === 'vrm' ? `avatars/ 里没有 ${value.slice(4)}，或者它不是能读取的 VRM`
+        : kind === 'png' ? `avatars/ 里没有「${value.slice(4)}」这个文件夹，或者里面缺 closed / open 图片`
+        : ''
+      if (me === token) status.textContent = `加载失败：${hint ? `${hint}（${e.message}）` : e.message}`
     }
   }
   sel.onchange = () => { show(sel.value); updDemoLink() }

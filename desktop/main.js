@@ -201,7 +201,7 @@ function refreshTray() {
       detail: '窗口选「LivLiv Live · 角色名」（electron.exe）\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
       buttons: ['知道了'],
     }) },
-    { label: '重新加载', click: () => win.loadURL(liveUrl()) },
+    { label: '重新加载', click: () => { refreshTray(); win.loadURL(liveUrl()) } },   // also picks up a new avatars/ file
     { label: '退出', click: () => { quitting = true; app.quit() } },
   ]))
 }
