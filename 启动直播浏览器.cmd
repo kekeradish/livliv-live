@@ -1,7 +1,14 @@
 @echo off
+chcp 65001 >nul
 rem Launches a dedicated Chrome for the livestream with Windows window-occlusion detection off:
 rem otherwise Chrome stops drawing the moment OBS covers the browser, and OBS captures a frozen frame.
 cd /d "%~dp0"
+where node >nul 2>nul
+if errorlevel 1 (
+  echo 需要先安装 Node.js ^(https://nodejs.org/^)，装好后重新双击本文件。
+  pause
+  exit /b 1
+)
 set "PORT=5173"
 set "URL=http://127.0.0.1:%PORT%/example/live-console.html"
 
