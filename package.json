@@ -90,7 +90,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "rm -rf dist && vite build && tsc -p tsconfig.build.json && node scripts/dts-extensions.mjs && node scripts/pack-characters.mjs",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/dts-extensions.mjs && node scripts/pack-characters.mjs",
     "test:types": "node test/types.mjs",
     "check": "tsc -p tsconfig.json",
     "test": "node --disable-warning=ExperimentalWarning --import ./test/ts.mjs --test \"test/*.test.ts\"",

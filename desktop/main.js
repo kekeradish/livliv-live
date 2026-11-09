@@ -273,7 +273,7 @@ function refreshTray() {
       type: 'info',
       title: 'OBS 采集这个形象窗',
       message: 'OBS → 来源 + → 窗口采集',
-      detail: '窗口选「LivLiv Live·形象窗」\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
+      detail: '窗口选「LivLiv Live · 角色名」\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
       buttons: ['知道了'],
     }) },
     { label: '重新加载', click: () => { refreshTray(); loadLive() } },   // also picks up a new avatars/ file
