@@ -78,6 +78,12 @@
     })
     window.camera?.running?.stop()  // a new model, new buttons: the old button's tracking ends with it
     window.camera = cameraButton(button('camera'), player, status)
+    const live = document.createElement('a')  // the console: set up the camera / mouth / background, then open the clean live page
+    const liveId = (asked && (asked.match(/\/([^/]+)\/?$/)?.[1] || asked) || 'd03ft').replace(/\.livliv$/, '')
+    live.href = `live-console.html?model=${encodeURIComponent(liveId)}`
+    live.textContent = '直播控制台 ↗'
+    live.style.cssText = 'font:inherit;padding:6px 11px;border-radius:8px;background:#ff4d5e;color:#fff;text-decoration:none'
+    bar.append(live)
   }
 
   const asked = new URLSearchParams(location.search).get('model')

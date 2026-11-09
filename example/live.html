@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivLiv Live</title>
+<!-- @mediapipe/tasks-vision, used only when ?cam=1 (face tracking) -->
+<script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
+<!-- Clean full-screen character for OBS / a stream overlay. Configure it on live-console.html, or by URL:
+     ?model=<id | path>                        character id (e.g. v05) or a path (.livliv / folder). Default d03ft
+     ?bg=transparent|dark|checker|#rrggbb      background. Default transparent (overlay); checker shows the cut-out
+     ?cam=1&mirror=0|1&smooth=0..1&follow=0..2 face tracking from the webcam
+     ?mic=1                                    lip sync from the microphone
+     ?expr=<id>                                expression to hold (ids in the model's model.json; e.g. smile)
+     ?mark=0                                   hide the character's LivLiv corner mark (this page only)
+     ?cursor=0                                 hide the mouse cursor
+     (press F for full screen: no browser chrome for OBS to crop) -->
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none }
+  canvas { display: block; width: 100vw; height: 100vh }
+  #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center;
+         color: #fff; font: 15px/1.5 system-ui, sans-serif; background: #000a }
+  #fs { position: fixed; top: 12px; right: 12px; z-index: 9; padding: 6px 12px; border: 0; border-radius: 8px;
+        background: #000a; color: #fff; font: 13px system-ui, sans-serif; cursor: pointer; opacity: 0;
+        transition: opacity .3s; pointer-events: none }
+  #fs.show { opacity: .9; pointer-events: auto }
+  #toast { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 10; display: none;
+           max-width: 92%; padding: 8px 14px; border-radius: 10px; background: #000d; color: #fff;
+           font: 13px/1.5 system-ui, sans-serif; text-align: center }
+</style>
+<canvas id="stage"></canvas>
+<button id="fs" type="button">全屏 ⛶</button>
+<div id="err"></div>
+<div id="toast"></div>
+<script type="module">
+  import { Player } from '../dist/index.js'
+
+  const q = new URLSearchParams(location.search)
+  const bg = q.get('bg')
+  if (bg && bg !== 'transparent') {
+    if (bg === 'dark') document.documentElement.style.background = '#20222b'
+    else if (bg === 'checker') document.documentElement.style.background = 'repeating-conic-gradient(#e9e9e9 0% 25%, #ffffff 0% 50%) 0% 0% / 28px 28px'
+    else document.documentElement.style.background = bg
+  }
+  if (q.get('cursor') === '0') document.documentElement.style.cursor = 'none'
+  const fsBtn = document.getElementById('fs')
+  if (q.get('pet') === '1') {
+    fsBtn.remove()
+  } else {
+    let fsTimer
+    const peekFs = () => {
+      if (document.fullscreenElement) return
+      fsBtn.classList.add('show')
+      clearTimeout(fsTimer)
+      fsTimer = setTimeout(() => fsBtn.classList.remove('show'), 3000)
+    }
+    addEventListener('mousemove', peekFs)
+    fsBtn.onclick = () => { fsBtn.classList.remove('show'); document.documentElement.requestFullscreen?.() }
+    document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement) fsBtn.classList.remove('show'); else peekFs() })
+    peekFs()
+  }
+  addEventListener('keydown', (e) => {
+    if (q.get('pet') === '1' || (e.key !== 'f' && e.key !== 'F')) return
+    if (document.fullscreenElement) document.exitFullscreen()
+    else document.documentElement.requestFullscreen?.()
+  })
+
+  const err = document.getElementById('err')
+  const fail = (msg) => { err.textContent = msg; err.style.display = 'grid' }
+  const note = (msg) => console.info('LivLiv live:', msg)
+  // the pet has no console to look at: a failure shows for a few seconds at the bottom, then gets out of the way
+  const toastEl = document.getElementById('toast')
+  let toastTimer
+  const toast = (msg) => {
+    if (q.get('pet') !== '1') return
+    toastEl.textContent = msg
+    toastEl.style.display = 'block'
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => { toastEl.style.display = 'none' }, 12000)
+  }
+  const why = (e) => {
+    const n = e?.name || ''
+    if (n === 'NotAllowedError' || n === 'SecurityError') return '权限被拒绝 —— Windows 设置 → 隐私和安全性 → 相机/麦克风 → 允许桌面应用访问'
+    if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return '没找到设备'
+    if (n === 'NotReadableError' || n === 'AbortError' || n === 'TrackStartError') return '设备被别的程序占用了（OBS、剪映、直播伴侣等），先关掉它们'
+    if (/face_landmarker|cdn\.jsdelivr|storage\.googleapis|Failed to fetch/i.test(e?.message || '')) return '面部模型下载失败，检查网络后重开'
+    return e?.message || String(e)
+  }
+
+  if (!Player.isSupported()) { fail('这个浏览器不支持 WebGL2，无法显示角色。'); throw new Error('no WebGL2') }
+
+  const canvas = document.getElementById('stage')
+  const player = new Player(canvas, { followPointer: false })   // eyes stay put: clean for a stream
+  window.player = player
+
+  const asked = q.get('model') || 'd03ft'
+  const source = asked.includes('/') || asked.endsWith('.livliv') ? asked : `../characters/${asked}/`
+  const loadWithFallback = async (s) => {
+    try { return await player.load(s) }
+    catch (e) { if (typeof s === 'string' && s.endsWith('.livliv')) return player.load(s.replace(/\.livliv$/, '/')); throw e }
+  }
+  try { window.model = await loadWithFallback(source) }
+  catch (e) { fail(`角色加载失败：${e.message}`); throw e }
+
+  if (q.get('mark') === '0') player.mark?.set('none', null)   // page-level only; the character files stay untouched
+  if (q.get('expr')) {
+    if (!player.setExpression(q.get('expr'))) console.warn('LivLiv live: no such expression:', q.get('expr'))
+  }
+  document.title = `LivLiv Live · ${window.model.name}`
+
+  const num = (k, d) => (q.has(k) && q.get(k) !== '' && !isNaN(+q.get(k)) ? +q.get(k) : d)
+
+  // face tracking: needs the camera. If the camera is refused or missing, the character still shows (idle motion).
+  // A camera another app holds (a browser preview, a camera source) often frees up later: keep asking for it.
+  if (q.get('cam') === '1') {
+    try {
+      const { startFaceTracking, preloadFaceModel } = await import('../dist/tracking.js')
+      preloadFaceModel().catch(() => {})   // the 8 MB model ahead of the camera; a real failure shows up when starting
+      for (let attempt = 0; ; attempt++) {
+        try {
+          window.face = await startFaceTracking(player, {
+            mirror: q.get('mirror') !== '0',
+            smoothing: num('smooth', 0.5),
+            follow: num('follow', 0),
+          })
+          if (window.camError) toast('摄像头已接上，面部追踪生效')
+          window.camError = null
+          note('face tracking on')
+          break
+        } catch (e) {
+          window.camError = e
+          const busy = e?.name === 'NotReadableError' || e?.name === 'TrackStartError' || e?.name === 'AbortError'
+          if (!busy || attempt >= 39) {
+            note(`face tracking off: ${e.name || ''} ${e.message}`)
+            toast(`摄像头没起来：${why(e)}`)
+            break
+          }
+          toast(`摄像头被别的程序占着（浏览器里的摄像头预览、OBS 摄像头源等）。关掉后会自动接上 · 第 ${attempt + 1} 次重试`)
+          await new Promise((r) => setTimeout(r, 3000))
+        }
+      }
+    } catch (e) {
+      window.camError = e
+      note(`face tracking off: ${e.message}`)
+      toast(`摄像头没起来：${why(e)}`)
+    }
+  }
+
+  // lip sync from the microphone (if it is refused, the character still shows)
+  if (q.get('mic') === '1') {
+    try {
+      const { startLipSync } = await import('../dist/voice.js')
+      window.mic = await startLipSync(player)
+      note('lip sync on')
+    } catch (e) {
+      window.micError = e
+      note(`lip sync off: ${e.message}`)
+      toast(`麦克风没起来：${why(e)}`)
+    }
+  }
+</script>
+</html>

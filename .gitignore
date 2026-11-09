@@ -1,7 +1,11 @@
 node_modules/
-dist/
+desktop/node_modules/
+desktop/settings.json
 .DS_Store
+*.log
 # your own unzipped model package, to try the examples with
 example/model/
-# made by the build (scripts/pack-characters.mjs)
+# made by the build (scripts/pack-characters.mjs); the folders themselves are enough to play
 characters/*.livliv
+# MediaPipe files, if you host the face model locally
+mediapipe/

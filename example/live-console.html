@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LivLiv 直播控制台</title>
+<script type="importmap">{ "imports": { "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/vision_bundle.mjs" } }</script>
+<style>
+  :root { color-scheme: dark }
+  * { box-sizing: border-box }
+  html, body { margin: 0; height: 100%; background: #14161c; color: #eef; font: 14px system-ui, sans-serif }
+  #app { display: grid; grid-template-columns: 1fr 340px; height: 100% }
+  #stageWrap { position: relative; background: #14161c; overflow: hidden }
+  canvas { display: block; width: 100%; height: 100% }
+  #status { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 4px 10px; border-radius: 8px;
+            background: #000a; font-size: 13px; opacity: .9; max-width: calc(100% - 24px) }
+  #panel { padding: 16px; overflow: auto; border-left: 1px solid #ffffff18; display: flex; flex-direction: column; gap: 14px }
+  h1 { font-size: 16px; margin: 0 0 2px }
+  label { display: block; font-size: 13px; opacity: .9; margin-bottom: 6px }
+  select, input[type=color] { width: 100%; padding: 7px 8px; border-radius: 8px; border: 1px solid #ffffff26;
+                              background: #1c1f27; color: inherit; font: inherit }
+  input[type=color] { height: 36px; padding: 2px }
+  fieldset { border: 1px solid #ffffff1a; border-radius: 10px; padding: 10px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px }
+  fieldset[disabled] { opacity: .45 }
+  legend { padding: 0 6px; font-size: 12px; opacity: .7 }
+  input[type=range] { width: 100% }
+  .chk { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px }
+  .chk input { width: 16px; height: 16px }
+  #go { margin-top: auto; padding: 12px; border: 0; border-radius: 10px; background: #ff4d5e; color: #fff;
+        font: 600 15px/1 system-ui, sans-serif; cursor: pointer }
+  .hint { font-size: 12px; line-height: 1.5; opacity: .6; margin: 0 }
+  @media (max-width: 760px) { #app { grid-template-columns: 1fr; grid-template-rows: 1fr auto } #panel { border-left: 0; border-top: 1px solid #ffffff18 } }
+</style>
+<body>
+<div id="app">
+  <div id="stageWrap"><canvas id="stage"></canvas><p id="status" role="status"></p></div>
+  <aside id="panel">
+    <h1>直播控制台</h1>
+    <div>
+      <label for="model">角色</label>
+      <select id="model"></select>
+    </div>
+    <div>
+      <label for="expr">表情</label>
+      <select id="expr"><option value="">无（默认）</option></select>
+    </div>
+    <div>
+      <label for="bg">背景</label>
+      <select id="bg">
+        <option value="transparent">透明（OBS 叠加）</option>
+        <option value="dark">深色</option>
+        <option value="checker">棋盘格（看透明效果）</option>
+        <option value="#00ff00">绿幕（窗口采集 + 色度键）</option>
+        <option value="color">纯色…</option>
+      </select>
+    </div>
+    <div id="colorRow" style="display:none">
+      <label for="bgcolor">颜色</label>
+      <input type="color" id="bgcolor" value="#eef2f6">
+    </div>
+    <label class="chk"><input type="checkbox" id="cam"> 摄像头 · 面部追踪</label>
+    <label class="chk"><input type="checkbox" id="mic"> 麦克风 · 嘴型同步</label>
+    <label class="chk"><input type="checkbox" id="mark" checked> 隐藏右下角 LivLiv 标</label>
+    <fieldset id="camOpts" disabled>
+      <legend>摄像头选项</legend>
+      <label class="chk"><input type="checkbox" id="mirror" checked> 镜像（左右一致）</label>
+      <label for="smooth">平滑 <output id="smoothV">0.50</output></label>
+      <input type="range" id="smooth" min="0" max="1" step="0.05" value="0.5">
+      <label for="follow">跟随幅度 <output id="followV">0.0</output></label>
+      <input type="range" id="follow" min="0" max="2" step="0.1" value="0">
+    </fieldset>
+    <button id="go">开播 → 打开直播页</button>
+    <a id="demoLink" target="_blank" style="font-size:12px;color:#8fb4ff;text-decoration:none">用这个角色试表情 / 动作 ↗</a>
+    <p class="hint">摄像头/麦克风首次会请求权限；授权后，同源的直播页会自动沿用。隐藏水印只在本页生效；公开使用请按角色许可署名「角色：LivLiv（livliv.ai）」。想要独立窗口：双击 player 目录里的「直播形象.cmd」，OBS 用「窗口采集」采它并勾「允许透明度」即可。</p>
+    <details style="font-size:12px;line-height:1.7">
+      <summary style="cursor:pointer;opacity:.85">OBS 怎么接？点开看步骤</summary>
+      <div style="opacity:.8;margin-top:6px">
+        <b>最省事：整屏虚拟形象（不用绿幕、不用裁剪）</b>
+        <ol style="margin:4px 0 10px 16px;padding:0">
+          <li><b>双击 player 目录里的「启动直播浏览器.cmd」</b>打开这个控制台。它会关掉 Chrome「被挡住就暂停渲染」——用普通 Chrome 的话，OBS 一盖住浏览器，画面就会冻住。</li>
+          <li>背景选「深色」，勾好摄像头/麦克风，点「开播」。</li>
+          <li>在弹出的直播窗口里点右上角「<b>全屏 ⛶</b>」（几秒后自动隐藏），或按 <b>F</b>；Esc 退出。全屏后没有标签栏、地址栏和标题栏，OBS 采集时不用再裁。</li>
+          <li>OBS → 来源 + → <b>窗口采集</b> → 选「LivLiv Live · 角色名」→ 右键 变换 → 适应屏幕。</li>
+          <li>只配这一次：以后点「开播」会自动复用这个窗口，OBS 一直认它。别关窗口、别最小化（可以放在 OBS 后面）。</li>
+        </ol>
+        <b>要叠在游戏/画面上（透明）</b>
+        <ol style="margin:4px 0 10px 16px;padding:0">
+          <li>背景改选「绿幕」，其余同上；在 OBS 的窗口采集来源上加滤镜 <b>色度键</b>，键颜色 #00FF00。</li>
+          <li>窗口采集不能真透明；真透明只有「浏览器源」，但它拿不到摄像头/麦克风，角色不会跟脸和嘴。</li>
+        </ol>
+        <button id="copySrc" type="button" style="margin-top:2px;padding:5px 10px;border:1px solid #ffffff26;border-radius:7px;background:#1c1f27;color:#8fb4ff;font:12px system-ui,sans-serif;cursor:pointer">复制浏览器源地址（透明）</button>
+      </div>
+    </details>
+  </aside>
+</div>
+<script type="module">
+  import { Player } from '../dist/index.js'
+  import { loadWithFallback, needWebGL, watchContext } from './loading.js'
+
+  const $ = (id) => document.getElementById(id)
+  const status = $('status'), canvas = $('stage')
+
+  needWebGL(Player)
+  const player = new Player(canvas, { followPointer: false })
+  window.player = player
+  watchContext(player)
+
+  // the featured characters
+  const list = await (await fetch('../characters/index.json')).json()
+  const sel = $('model')
+  const twins = new Set(list.filter((c) => list.filter((o) => o.name === c.name).length > 1).map((c) => c.name))
+  for (const c of list) {
+    const o = document.createElement('option')
+    o.value = c.id
+    o.textContent = twins.has(c.name) ? `${c.name} · ${c.id}` : c.name
+    sel.append(o)
+  }
+  sel.value = 'd03ft'
+  const q = new URLSearchParams(location.search)
+  const want = q.get('model')
+  if (want && list.some((c) => c.id === want)) sel.value = want
+
+  async function show(id) {
+    status.textContent = '加载中…'
+    try {
+      window.model = await loadWithFallback(player, `../characters/${id}.livliv`, {
+        onProgress: (p) => { if (p.step === 'download') status.textContent = `加载… ${Math.round((p.progress || 0) * 100)}%` },
+      })
+      applyMark()
+      fillExprs()
+      if (exprSel.value) player.setExpression(exprSel.value)
+      status.textContent = `${window.model.name} · 就绪`
+    } catch (e) { status.textContent = `加载失败：${e.message}` }
+  }
+  sel.onchange = () => { show(sel.value); updDemoLink() }
+
+  // the corner mark: hide it in the preview and pass mark=0 to the live page. Reloading a model resets it, so reapply.
+  const markEl = $('mark')
+  function applyMark() {
+    const info = window.model
+    if (!info) return
+    if (markEl.checked) return player.mark.set('none', null)
+    const kind = info.meta ? info.meta.watermark?.kind ?? 'none' : info.watermark === 'LivLiv' ? 'livliv' : info.watermark ? 'text' : 'none'
+    player.mark.set(kind, info.watermark ?? null, info.meta?.watermark?.center !== false)
+  }
+  markEl.onchange = applyMark
+
+  // expressions: the preview shows the pick immediately; the live page gets it as ?expr=
+  const exprSel = $('expr')
+  function fillExprs() {
+    const keep = exprSel.value
+    exprSel.length = 1
+    for (const e of player.expressions) {
+      const o = document.createElement('option')
+      o.value = e.id
+      o.textContent = e.label || e.id
+      exprSel.append(o)
+    }
+    if ([...exprSel.options].some((o) => o.value === keep)) exprSel.value = keep
+  }
+  exprSel.onchange = () => {
+    player.setExpression(exprSel.value || null)
+    status.textContent = exprSel.value ? `表情：${exprSel.selectedOptions[0].textContent}` : '表情：默认'
+  }
+  const demoLink = $('demoLink')
+  function updDemoLink() { demoLink.href = `demo.html?model=${encodeURIComponent('../characters/' + sel.value + '/')}` }
+  updDemoLink()
+
+  // camera (face tracking)
+  const camEl = $('cam'), camOpts = $('camOpts'), mirrorEl = $('mirror'), smoothEl = $('smooth'), followEl = $('follow')
+  let face = null
+  async function startCam() {
+    status.textContent = '正在启动摄像头…'
+    try {
+      const { startFaceTracking } = await import('../dist/tracking.js')
+      face = await startFaceTracking(player, {
+        mirror: mirrorEl.checked, smoothing: +smoothEl.value, follow: +followEl.value,
+        onProgress: (s) => { status.textContent = s.step === 'download' ? `人脸模型 ${Math.round((s.progress || 0) * 100)}%` : `${s.step}…` },
+      })
+      camOpts.disabled = false
+      status.textContent = '摄像头已开'
+    } catch (e) {
+      camEl.checked = false; camOpts.disabled = true
+      const busy = e?.name === 'NotReadableError' || e?.name === 'TrackStartError'
+      status.textContent = busy ? '摄像头被占用了 —— 形象窗正开着摄像头追踪，先在托盘里关掉「摄像头 · 面部追踪」再来预览'
+        : `摄像头未开：${e.name || ''} ${e.message}`
+    }
+  }
+  function stopCam() { face?.stop(); face = null; camOpts.disabled = true }
+  camEl.onchange = () => { if (camEl.checked) startCam(); else { stopCam(); status.textContent = '摄像头已关' } }
+  mirrorEl.onchange = () => { if (face) { face.mirror = mirrorEl.checked; status.textContent = `镜像：${mirrorEl.checked ? '开' : '关'}` } }
+  const tune = () => { if (face) { face.stop(); face = null; startCam() } }  // smoothing/follow take effect on (re)start
+  smoothEl.oninput = () => { $('smoothV').textContent = (+smoothEl.value).toFixed(2) }
+  followEl.oninput = () => { $('followV').textContent = (+followEl.value).toFixed(1) }
+  smoothEl.onchange = tune
+  followEl.onchange = tune
+
+  // microphone (lip sync)
+  const micEl = $('mic')
+  let mic = null
+  async function startMic() {
+    status.textContent = '正在开启麦克风…'
+    try {
+      const { startLipSync } = await import('../dist/voice.js')
+      mic = await startLipSync(player)
+      status.textContent = '麦克风已开（说句话试试）'
+    } catch (e) { micEl.checked = false; status.textContent = `麦克风未开：${e.message}` }
+  }
+  function stopMic() { mic?.stop(); mic = null }
+  micEl.onchange = () => { if (micEl.checked) startMic(); else { stopMic(); status.textContent = '麦克风已关' } }
+
+  // background preview (what the live page will use)
+  const bgSel = $('bg'), colorRow = $('colorRow'), bgColor = $('bgcolor'), stageWrap = $('stageWrap')
+  function applyBg() {
+    colorRow.style.display = bgSel.value === 'color' ? '' : 'none'
+    stageWrap.style.backgroundImage = 'none'
+    stageWrap.style.backgroundColor = 'transparent'
+    if (bgSel.value === 'dark') stageWrap.style.backgroundColor = '#20222b'
+    else if (bgSel.value === 'checker') stageWrap.style.backgroundImage = 'repeating-conic-gradient(#e9e9e9 0% 25%, #ffffff 0% 50%) 0% 0% / 28px 28px'
+    else if (bgSel.value === 'color') stageWrap.style.backgroundColor = bgColor.value
+    else if (bgSel.value.startsWith('#')) stageWrap.style.backgroundColor = bgSel.value
+  }
+  bgSel.onchange = applyBg
+  bgColor.oninput = applyBg
+  applyBg()
+
+  // open the clean live page with these settings; free the camera/mic first so the new tab can use them
+  $('go').onclick = () => {
+    const p = new URLSearchParams()
+    p.set('model', sel.value)
+    p.set('bg', bgSel.value === 'color' ? bgColor.value : bgSel.value)
+    p.set('cursor', '0')
+    if (camEl.checked) { p.set('cam', '1'); p.set('mirror', mirrorEl.checked ? '1' : '0'); p.set('smooth', smoothEl.value); p.set('follow', followEl.value) }
+    if (micEl.checked) p.set('mic', '1')
+    if (markEl.checked) p.set('mark', '0')
+    if (exprSel.value) p.set('expr', exprSel.value)
+    const url = `live.html?${p.toString()}`
+    stopCam(); stopMic()
+    // a popup window has no tabs or address bar: nothing extra for OBS to capture
+    setTimeout(() => window.open(url, 'livliv-live', 'popup=yes,width=720,height=1000'), 250)
+  }
+
+  await show(sel.value)
+
+  // a browser-source URL: transparent, no camera/mic (OBS's browser source cannot ask for them)
+  $('copySrc').onclick = async () => {
+    const p = new URLSearchParams({ model: sel.value, bg: 'transparent' })
+    if (markEl.checked) p.set('mark', '0')
+    if (exprSel.value) p.set('expr', exprSel.value)
+    const url = new URL(`live.html?${p}`, location.href).href
+    try { await navigator.clipboard.writeText(url); status.textContent = `已复制：${url}` } catch { status.textContent = url }
+  }
+</script>
+</body>
+</html>

@@ -59,7 +59,7 @@
     // a name is its author's text: never HTML. Two of the same name (Nana and Refined Nana) are told apart by their ids
     const twin = cast.filter((o) => o.name === c.name).length > 1
     label.textContent = twin ? `${c.name} · ${c.id}` : c.name
-    b.append(img, label); b.title = label.textContent; b.onclick = () => show(c.id)
+    b.append(img, label); b.title = label.textContent; b.onclick = () => { location.href = `live-console.html?model=${c.id}` }
     li.append(b); ul.append(li); buttons.set(c.id, b)
   }
 
