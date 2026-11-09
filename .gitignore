@@ -7,8 +7,8 @@ desktop/settings.json
 example/model/
 # made by the build (scripts/pack-characters.mjs); the folders themselves are enough to play
 characters/*.livliv
-# MediaPipe files, if you host the face model locally
-mediapipe/
+# electron-builder output (the portable exe)
+release/
 # your own characters (they stay on your machine; keep the note)
 avatars/*
 !avatars/说明.txt

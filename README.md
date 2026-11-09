@@ -4,7 +4,8 @@
 
 ## 能做什么
 
-- 自己的角色：`avatars/` 里放 `.vrm`（VRoid 等）或一张张嘴/闭嘴的 PNG 图片，控制台和托盘里直接选
+- 自己的角色：角色目录里放 `.vrm`（VRoid 等）或一张张嘴/闭嘴的 PNG 图片，控制台和托盘里直接选
+- 双击即用的免安装 exe：不用装 Node.js / Chrome，断网也能跑
 - 动作：点头、摇头、歪头、跳一下、害羞（托盘菜单、控制台按钮，或直播页按 `1`–`5`）
 - 透明、无边框、无 UI 的形象窗口；OBS 窗口采集勾「允许透明度」即为真透明叠加
 - 摄像头面部追踪：转头、点头、歪头、眨眼、眼神、嘴型、微笑
@@ -13,24 +14,36 @@
 - 直播控制台：选角色/表情/背景（透明、深色、棋盘、绿幕、任意色）、页面层隐藏 LivLiv 角标、复制 OBS 浏览器源地址
 - 直播页支持 URL 参数，方便 OBS 或 iframe 直接引用
 
-## 环境要求
+## 两种用法
 
-- **Windows 10/11**（透明窗口与 OBS 的「Windows 10 采集方式」按此写）
-- **Node.js 22 或更新**（本地服务、控制台、形象窗都要它）
-- **第一次运行需要联网**：`直播形象.cmd` 会下载 Electron（约 370 MB，装一次就好）；面捕首次启动还要下载 MediaPipe 运行库与人脸模型（约 17 MB）。装好后角色、表情、口型、形象窗可离线使用，面捕和 VRM（three.js）仍需要网络
-- **Chrome**：`启动直播浏览器.cmd` 用的专用浏览器配置
+### 一、免安装版（双击即用）
 
-不想装 Node.js 的话，目前没有免安装版本；要给别人一个双击即用的包，需要用 electron-builder 打包成 exe。
+双击 `release/LivLiv形象窗-1.0.0.exe`（按下方「构建」生成）：**不需要 Node.js、不需要联网、不需要 Chrome**。Electron、页面、21 个角色、MediaPipe 人脸模型、three.js 全部打进了包里（约 126 MB）。
+
+- 第一次运行 Windows 可能提示「未知发布者」（没有购买代码签名证书），点「更多信息 → 仍要运行」。
+- 首次运行会在 `文档\LivLiv形象\avatars\` 建好你自己的角色文件夹；托盘菜单「打开角色目录（avatars）」可直接打开。
+- 托盘菜单「打开调试台（浏览器）」用系统默认浏览器打开直播控制台。
+- 便携版每次启动会解压到临时目录：比安装版慢几秒，占用约 430 MB 临时空间，退出后系统会自行清理。
+- 断网可用：角色、动作、表情、口型、面捕、VRM 都不再访问互联网。
+
+### 二、源码运行（改代码时）
+
+- **Windows 10/11**
+- **Node.js 22 或更新**
+- 第一次 `npm install` 需要联网下载 Electron（约 370 MB）；之后运行、面捕、VRM 都不再需要网络（依赖已在 `vendor/`）
+- `启动直播浏览器.cmd` 需要 Chrome（免安装版改用系统默认浏览器）
 
 ## 快速开始
 
-已经装好 Node.js 的前提下：
+**免安装版**：双击 `release/LivLiv形象窗-1.0.0.exe`，右下角托盘图标里换角色、开关摄像头/麦克风、调大小。
+
+**源码运行**（已经装好 Node.js 的前提下）：
 
 1. 双击 **`直播形象.cmd`**（第一次会自动安装 Electron，需要几分钟）。
-   - 本地服务会自动起在 `http://127.0.0.1:5173`
+   - 本地服务在 Electron 进程内自动起在 `http://127.0.0.1:5173`
    - 右下角出现形象窗；托盘图标里可以换角色、表情、开关摄像头/麦克风、调大小
 2. OBS：来源 `+` → **窗口采集** → 窗口选「LivLiv Live · 角色名」→ 采集方式选「Windows 10 (1903 及以上)」→ 勾「允许透明度」→ 右键来源 → 变换 → 适应屏幕
-3. 想先调参数：双击 **`启动直播浏览器.cmd`** 打开直播控制台（这个 Chrome 配置关掉了后台节流，窗口被挡住也会继续渲染）
+3. 想先调参数：免安装版点托盘「打开调试台（浏览器）」；源码版双击 **`启动直播浏览器.cmd`**（独立 Chrome 配置，窗口被挡住也会继续渲染）
 
 手动启动服务（可选）：`node serve.mjs 5173`，然后打开 `http://127.0.0.1:5173/example/live-console.html`。
 
@@ -63,9 +76,14 @@
 
 ## 用自己的角色
 
-把文件放进 `player/avatars/`（托盘菜单里有「打开角色目录（avatars）」，放完点「重新加载」；控制台则刷新页面）：
+把文件放进角色目录（托盘菜单里有「打开角色目录（avatars）」，放完点「重新加载」；控制台则刷新页面）：
 
-- **VRM（3D）**：直接放 `xxx.vrm`。VRoid Studio 导出的文件即可；需要联网加载 three.js（jsDelivr）。
+- **源码运行**：`player/avatars/`
+- **免安装版**：`文档\LivLiv形象\avatars\`（首次启动自动创建）
+
+然后：
+
+- **VRM（3D）**：直接放 `xxx.vrm`。VRoid Studio 导出的文件即可；three.js 已本地化，不联网也能加载。
 - **PNGTuber（2D 图片）**：建一个子文件夹（名字随意），里面放
   `closed.png`（闭嘴）、`open.png`（张嘴），可选 `blink.png`（闭眼）、`blink-open.png`（闭眼张嘴）、`name.txt`（名字）。jpg / webp 也可以，文件名要对上。
 - Live2D（`.model3.json`）不支持。用别人的模型前先确认许可允许直播使用。
@@ -85,13 +103,16 @@
 
 - **摄像头同一时间只能被一个程序使用。** OBS 里不要加「视频采集设备」；浏览器里也不要同时开摄像头预览，否则形象窗会拿不到设备。
 - 被占用时，形象窗底部会显示提示并每 3 秒自动重试；对方释放后会自动接上，不用重启。
-- 面捕依赖 MediaPipe：首次启动会从 jsDelivr 和 Google 下载运行库与人脸模型（约 17 MB，之后走浏览器缓存），运行时会向 Google 发送使用统计。**目前尚未本地化**，离线环境下面捕会起不来。
+- 面捕依赖 MediaPipe：运行库和人脸模型已放在 `vendor/mediapipe/`，连同 three.js 一起本地加载，**断网也能用**，也不会再从 CDN 下载。
 
 ## 相对上游的改动
 
 - 新增 `example/live.html`、`example/live-console.html`（支持精选角色、VRM、PNGTuber）
 - 新增 `avatars/`：放自己的 `.vrm` / PNGTuber 图片，服务器提供 `avatars.json` 列表
 - 新增 `desktop/`：Electron 透明窗口 + 托盘（角色、表情、动作、摄像头、麦克风）；`直播形象.cmd` 一键启动
+- 新增 `desktop/server.js`：打包版在 Electron 进程内直接起本地服务，不再依赖外部 Node.js
+- 新增 `vendor/`：本地化的 MediaPipe（wasm + 3.7 MB 人脸模型）、three.js、three-vrm、React，所有页面离线可用
+- 新增免安装打包：`electron-builder` 的 `portable` 目标，产物 `release/LivLiv形象窗-1.0.0.exe`
 - 新增 `serve.mjs`：零依赖静态服务器；`启动直播浏览器.cmd` 专用 Chrome 配置
 - `example/gallery.html`、`example/demo.html` 增加「直播控制台」入口
 - 隐藏角标仅在页面层（`mark=0`），`characters/` 里的角色文件未做任何修改
@@ -100,12 +121,14 @@
 
 ```
 characters/          21 个角色（模型、贴图、许可）
-avatars/             你自己的角色（.vrm / PNGTuber，不同步到 GitHub）
+avatars/             你自己的角色（源码运行时；.vrm / PNGTuber，不同步到 GitHub）
 dist/                构建产物（已提交，克隆即可运行）
+vendor/              本地化的前端依赖（MediaPipe、three.js、three-vrm、React）
 src/                 播放器源码
 example/             示例页与直播页
-desktop/             Electron 透明窗口与托盘
-serve.mjs            本地静态服务器
+desktop/             Electron 透明窗口、托盘、内置静态服务
+release/             免安装 exe 与解包目录（构建产物，不进 Git）
+serve.mjs            本地静态服务器（源码运行时）
 直播形象.cmd          启动形象窗
 启动直播浏览器.cmd     启动控制台（独立 Chrome 配置）
 ```
@@ -114,7 +137,11 @@ serve.mjs            本地静态服务器
 
 ```sh
 npm install
-npm run build   # 重新生成 dist/
+npm run build            # 重新生成 dist/ 和 characters/*.livliv
+
+cd desktop
+npm install
+npm run dist             # 打包免安装 exe → ../release/LivLiv形象窗-1.0.0.exe
 ```
 
 ## 许可与署名（务必阅读）

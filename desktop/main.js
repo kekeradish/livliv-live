@@ -4,12 +4,13 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, session, screen, dialog, gl
 const path = require('node:path')
 const fs = require('node:fs')
 const net = require('node:net')
-const { spawn } = require('node:child_process')
+const { startServer } = require('./server')
 
-const ROOT = path.join(__dirname, '..')
+// packaged: the pages, characters and vendored libraries ship under resources/livliv; dev: the repository itself
+const ROOT = app.isPackaged ? path.join(process.resourcesPath, 'livliv') : path.join(__dirname, '..')
 const PORT = 5173
 const BASE = `http://127.0.0.1:${PORT}`
-const SETTINGS_FILE = path.join(__dirname, 'settings.json')
+const SETTINGS_FILE = app.isPackaged ? path.join(app.getPath('userData'), 'settings.json') : path.join(__dirname, 'settings.json')
 const SIZES = { small: [360, 500], medium: [480, 660], large: [640, 880] }
 const DEFAULTS = { model: 'd03ft', expr: '', cam: true, mic: true, size: 'medium', alwaysOnTop: false, clickThrough: false }
 
@@ -17,9 +18,10 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,In
 
 let win = null
 let tray = null
-let serverProc = null
+let httpServer = null
 let quitting = false
 let settings = loadSettings()
+let avatarsPath = null
 
 function loadSettings() {
   try { return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')) } } catch { return { ...DEFAULTS } }
@@ -34,17 +36,43 @@ function characters() {
   const list = readJson(path.join(ROOT, 'characters', 'index.json')) || []
   return list.map(({ id, name }) => ({ id, name }))
 }
-// avatars/: your own .vrm files, and PNGTuber folders (closed/open pictures, optional name.txt)
-const AVATARS_DIR = path.join(ROOT, 'avatars')
+// avatars/: your own .vrm files, and PNGTuber folders (closed/open pictures, optional name.txt).
+// Packaged, the app's own folder is read-only: user characters live in a visible folder under Documents instead.
+function avatarsDir() {
+  if (!avatarsPath) {
+    try {
+      avatarsPath = app.isPackaged ? path.join(app.getPath('documents'), 'LivLiv形象', 'avatars') : path.join(ROOT, 'avatars')
+    } catch {
+      avatarsPath = path.join(app.getPath('userData'), 'avatars')
+    }
+  }
+  return avatarsPath
+}
+function prepareAvatarsDir() {
+  const dir = avatarsDir()
+  try { fs.mkdirSync(dir, { recursive: true }) } catch {}
+  if (app.isPackaged) {
+    const readme = path.join(dir, '怎么放角色.txt')
+    if (!fs.existsSync(readme)) {
+      try {
+        fs.writeFileSync(readme, '把你自己的角色放在这个文件夹里：\r\n\r\n'
+          + 'VRM：把 xxx.vrm 直接复制进来。\r\n'
+          + 'PNGTuber：新建一个文件夹，放 closed.png 和 open.png（可再加 blink.png、blink-open.png）；'
+          + '想要自定义名字就放一个 name.txt，第一行写名字。\r\n\r\n'
+          + '放好后右键托盘图标 →「重新加载」，或重启本程序。\r\n')
+      } catch {}
+    }
+  }
+  return dir
+}
 function openAvatars() {
-  try { fs.mkdirSync(AVATARS_DIR, { recursive: true }) } catch {}
-  shell.openPath(AVATARS_DIR).catch(() => {})
+  shell.openPath(prepareAvatarsDir()).catch(() => {})
 }
 function openCharacters() {
   shell.openPath(path.join(ROOT, 'characters')).catch(() => {})
 }
 function avatars() {
-  const dir = AVATARS_DIR
+  const dir = avatarsDir()
   const out = { vrm: [], png: [] }
   let entries = []
   try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return out }
@@ -96,32 +124,19 @@ async function ourServer() {
 
 const warn = (message, detail) => { dialog.showMessageBox({ type: 'error', title: '形象窗', message, detail, buttons: ['知道了'] }).catch(() => {}) }
 
-/** children that exit at once (no such file, a crash) do not start a server: tell the next candidate */
-function trySpawn(bin) {
-  return new Promise((resolve) => {
-    let child
-    try { child = spawn(bin, ['serve.mjs', String(PORT)], { cwd: ROOT, windowsHide: true, stdio: 'ignore' }) } catch { resolve(null); return }
-    let settled = false
-    const done = (value) => { if (!settled) { settled = true; resolve(value) } }
-    child.once('error', () => done(null))
-    child.once('exit', () => done(null))
-    setTimeout(() => done(child), 1200)   // still running: the port check below decides
-  })
-}
-
+/** the live page comes from a server run in this very process: no Node.js install, nothing else to start */
 async function ensureServer() {
-  if (await portOpen()) return
-  // 'node' may not be on PATH when Node was installed without it; the usual install folders still work
-  const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'nodejs', 'node.exe') : null
-  const bins = [process.env.LIVLIV_NODE, 'node', 'C:\\Program Files\\nodejs\\node.exe', 'D:\\Program Files\\nodejs\\node.exe', local].filter(Boolean)
-  for (const bin of bins) {
-    const child = await trySpawn(bin)
-    if (!child) continue
-    for (let i = 0; i < 32; i++) {
-      await new Promise((r) => setTimeout(r, 250))
-      if (await portOpen()) { serverProc = child; return }
-    }
-    try { child.kill() } catch {}
+  if (await portOpen()) {
+    if (await ourServer()) return true
+    warn(`端口 ${PORT} 被别的程序占用了`, '形象页要用 127.0.0.1:5173，可能被 Vite 之类的开发服务器占了。\n\n关掉占用的程序，然后右键托盘图标 →「重新加载」。')
+    return false
+  }
+  try {
+    httpServer = await startServer({ root: ROOT, avatarsDir: avatarsDir(), port: PORT })
+    return true
+  } catch (e) {
+    warn('本地页面服务没有起来', `127.0.0.1:${PORT} 打不开：${e.message}\n\n请右键托盘图标 →「重新加载」。`)
+    return false
   }
 }
 
@@ -177,7 +192,7 @@ function createWindow() {
   win.webContents.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return
     if (navigations++ >= 2) {
-      warn('形象页没有起来', `页面来自 http://127.0.0.1:${PORT}，本地服务没能启动。\n\n请确认已安装 Node.js，然后右键托盘图标 →「重新加载」。`)
+      warn('形象页没有起来', `页面来自 http://127.0.0.1:${PORT}，本地页面服务没能启动。\n\n请右键托盘图标 →「重新加载」。`)
       return
     }
     loadLive()
@@ -199,15 +214,7 @@ function apply(partial, reload = true) {
 /** the page is served by the local server: bring it back before a reload if it went away */
 async function loadLive() {
   if (!win) return
-  if (await portOpen()) {
-    if (!(await ourServer())) {
-      warn(`端口 ${PORT} 被别的程序占用了`, '形象页要用 127.0.0.1:5173，可能被 Vite 之类的开发服务器占了。\n\n关掉占用的程序，然后右键托盘图标 →「重新加载」。')
-      return
-    }
-  } else {
-    await ensureServer()
-  }
-  win.loadURL(liveUrl())
+  if (await ensureServer()) win.loadURL(liveUrl())
 }
 
 /** expressions change at runtime: no reload, so the picture never blinks out and the camera keeps running */
@@ -236,6 +243,7 @@ function refreshTray() {
         : { label: '我的角色（空）', submenu: [{ label: '打开 avatars 放模型…', click: openAvatars }] },
     ] },
     { label: '打开角色目录（avatars）', click: openAvatars },
+    { label: '打开调试台（浏览器）', click: () => shell.openExternal(`${BASE}/example/live-console.html`).catch(() => {}) },
     { label: '表情', submenu: [
       { label: '无（跟随我的脸）', type: 'radio', checked: !settings.expr, click: () => setExpression('') },
       ...exprs.map((e) => ({ label: e.label, type: 'radio', checked: settings.expr === e.id, click: () => setExpression(e.id) })),
@@ -265,7 +273,7 @@ function refreshTray() {
       type: 'info',
       title: 'OBS 采集这个形象窗',
       message: 'OBS → 来源 + → 窗口采集',
-      detail: '窗口选「LivLiv Live · 角色名」（electron.exe）\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
+      detail: '窗口选「LivLiv Live·形象窗」\n采集方式选「Windows 10 (1903 及以上)」\n勾上「允许透明度」（Allow Transparency）\n右键来源 → 变换 → 适应屏幕\n\n这样就是真透明叠加，不用绿幕、不用裁剪。\n如果找不到「允许透明度」，改用「显示器采集」也能看到它。',
       buttons: ['知道了'],
     }) },
     { label: '重新加载', click: () => { refreshTray(); loadLive() } },   // also picks up a new avatars/ file
@@ -281,7 +289,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
     session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media')
-    await ensureServer()
+    prepareAvatarsDir()
     createWindow()
     tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')))
     tray.setToolTip('LivLiv 直播形象')
@@ -291,5 +299,5 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.on('window-all-closed', (e) => e.preventDefault())
-  app.on('will-quit', () => { if (serverProc) { try { serverProc.kill() } catch {} } })
+  app.on('will-quit', () => { try { httpServer?.close() } catch {} })
 }

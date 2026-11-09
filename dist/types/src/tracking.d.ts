@@ -2,10 +2,10 @@ import { type StartStep } from './runtime/tracking.js';
 import type { Host } from './base.js';
 export type { StartStep };
 export interface FaceModelFiles {
-    /** the folder of MediaPipe's wasm files (vision_wasm_internal.js / .wasm and the nosimd pair). Default: jsDelivr's
-     *  copy of @mediapipe/tasks-vision 1.1.1. Host them yourself in production */
+    /** the folder of MediaPipe's wasm files (vision_wasm_internal.js / .wasm and the nosimd pair). Default: the vendored
+     *  copy at ../vendor/mediapipe/wasm (shipped with the player, so face tracking needs no network) */
     wasmUrl?: string;
-    /** face_landmarker.task. Default: Google's model bucket */
+    /** face_landmarker.task. Default: the vendored copy at ../vendor/mediapipe/face_landmarker.task */
     modelUrl?: string;
 }
 export interface FaceTrackingOptions extends FaceModelFiles {

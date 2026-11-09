@@ -3,11 +3,44 @@
   "private": true,
   "version": "1.0.0",
   "description": "LivLiv 直播形象窗：透明窗口，供 OBS 窗口采集",
+  "author": "LivLiv",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
   },
   "devDependencies": {
-    "electron": "^45.2.3"
+    "electron": "^45.2.3",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ai.livliv.live",
+    "productName": "LivLiv形象窗",
+    "asar": true,
+    "directories": {
+      "output": "../release"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "../example", "to": "livliv/example" },
+      { "from": "../dist", "to": "livliv/dist" },
+      { "from": "../vendor", "to": "livliv/vendor" },
+      { "from": "../characters", "to": "livliv/characters" },
+      { "from": "../schema", "to": "livliv/schema" }
+    ],
+    "win": {
+      "target": [
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "icon.png"
+    },
+    "portable": {
+      "artifactName": "LivLiv形象窗-${version}.exe"
+    }
   }
 }

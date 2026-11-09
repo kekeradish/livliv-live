@@ -1,18 +1,17 @@
 // @livliv-dev/player/tracking: the character follows a face in the webcam (MediaPipe Face Landmarker, in the browser; camera
 // images stay on the device, though MediaPipe sends Google usage statistics while it runs). A separate import: it needs
-// the @mediapipe/tasks-vision package and downloads ~8 MB of model the first time (the wasm runtime and the face model;
-// cached by the browser after that).
-import { FaceTracker, LOST_AFTER, V, loadFaceModel, setFaceModelFiles, type StartStep } from './runtime/tracking'
+// the @mediapipe/tasks-vision package, plus the wasm runtime and face model vendored under vendor/mediapipe/ (no network).
+import { FaceTracker, LOST_AFTER, loadFaceModel, setFaceModelFiles, type StartStep } from './runtime/tracking'
 import { defaultParams, type Params } from './runtime/params'
 import type { Driver, Host } from './base'
 
 export type { StartStep }
 
 export interface FaceModelFiles {
-  /** the folder of MediaPipe's wasm files (vision_wasm_internal.js / .wasm and the nosimd pair). Default: jsDelivr's
-   *  copy of @mediapipe/tasks-vision 1.1.1. Host them yourself in production */
+  /** the folder of MediaPipe's wasm files (vision_wasm_internal.js / .wasm and the nosimd pair). Default: the vendored
+   *  copy at ../vendor/mediapipe/wasm (shipped with the player, so face tracking needs no network) */
   wasmUrl?: string
-  /** face_landmarker.task. Default: Google's model bucket */
+  /** face_landmarker.task. Default: the vendored copy at ../vendor/mediapipe/face_landmarker.task */
   modelUrl?: string
 }
 
@@ -50,8 +49,8 @@ export interface FaceTracking {
 }
 
 const DEFAULT_FILES = {
-  wasm: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${V}/wasm`,
-  model: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+  wasm: '../vendor/mediapipe/wasm',
+  model: '../vendor/mediapipe/face_landmarker.task',
 }
 const files = (o: FaceModelFiles) => setFaceModelFiles({ wasm: o.wasmUrl ?? DEFAULT_FILES.wasm, model: o.modelUrl ?? DEFAULT_FILES.model })
 
