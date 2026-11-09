@@ -229,6 +229,7 @@
     const keep = exprSel.value
     exprSel.length = 1
     for (const e of player.expressions) {
+      if (e.id === 'smile' && window.model?.format === 'png') continue   // a PNGTuber has no smile picture
       const o = document.createElement('option')
       o.value = e.id
       o.textContent = e.label || e.id

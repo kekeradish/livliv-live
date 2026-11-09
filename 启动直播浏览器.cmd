@@ -4,6 +4,8 @@ rem Launches a dedicated Chrome for the livestream with Windows window-occlusion
 rem otherwise Chrome stops drawing the moment OBS covers the browser, and OBS captures a frozen frame.
 cd /d "%~dp0"
 where node >nul 2>nul
+if errorlevel 1 call :find_node
+where node >nul 2>nul
 if errorlevel 1 (
   echo 需要先安装 Node.js ^(https://nodejs.org/^)，装好后重新双击本文件。
   pause
@@ -35,3 +37,11 @@ start "" "%CHROME%" ^
   --autoplay-policy=no-user-gesture-required ^
   --app="%URL%" ^
   --window-size=1200,900
+exit /b 0
+
+rem Node installed but not added to PATH: use the usual install folder
+:find_node
+if exist "%ProgramFiles%\nodejs\node.exe" set "PATH=%ProgramFiles%\nodejs;%PATH%"
+if exist "D:\Program Files\nodejs\node.exe" set "PATH=D:\Program Files\nodejs;%PATH%"
+if exist "%LocalAppData%\Programs\nodejs\node.exe" set "PATH=%LocalAppData%\Programs\nodejs;%PATH%"
+exit /b 0

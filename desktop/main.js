@@ -85,19 +85,43 @@ const portOpen = () => new Promise((resolve) => {
   s.setTimeout(800, () => done(false))
 })
 
+/** something else may hold 5173 (Vite's default port too): only a server that answers like ours may be reused */
+async function ourServer() {
+  try {
+    const r = await fetch(`${BASE}/avatars.json`, { signal: AbortSignal.timeout(1500) })
+    const j = await r.json()
+    return Array.isArray(j.vrm) && Array.isArray(j.png)
+  } catch { return false }
+}
+
+const warn = (message, detail) => { dialog.showMessageBox({ type: 'error', title: '形象窗', message, detail, buttons: ['知道了'] }).catch(() => {}) }
+
+/** children that exit at once (no such file, a crash) do not start a server: tell the next candidate */
+function trySpawn(bin) {
+  return new Promise((resolve) => {
+    let child
+    try { child = spawn(bin, ['serve.mjs', String(PORT)], { cwd: ROOT, windowsHide: true, stdio: 'ignore' }) } catch { resolve(null); return }
+    let settled = false
+    const done = (value) => { if (!settled) { settled = true; resolve(value) } }
+    child.once('error', () => done(null))
+    child.once('exit', () => done(null))
+    setTimeout(() => done(child), 1200)   // still running: the port check below decides
+  })
+}
+
 async function ensureServer() {
   if (await portOpen()) return
-  const node = [process.env.LIVLIV_NODE, 'node', 'C:\\Program Files\\nodejs\\node.exe', 'D:\\Program Files\\nodejs\\node.exe'].filter(Boolean)
-  for (const bin of node) {
-    try {
-      serverProc = spawn(bin, ['serve.mjs', String(PORT)], { cwd: ROOT, windowsHide: true, stdio: 'ignore' })
-      serverProc.on('error', () => { serverProc = null })
-      break
-    } catch {}
-  }
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 250))
-    if (await portOpen()) return
+  // 'node' may not be on PATH when Node was installed without it; the usual install folders still work
+  const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs', 'nodejs', 'node.exe') : null
+  const bins = [process.env.LIVLIV_NODE, 'node', 'C:\\Program Files\\nodejs\\node.exe', 'D:\\Program Files\\nodejs\\node.exe', local].filter(Boolean)
+  for (const bin of bins) {
+    const child = await trySpawn(bin)
+    if (!child) continue
+    for (let i = 0; i < 32; i++) {
+      await new Promise((r) => setTimeout(r, 250))
+      if (await portOpen()) { serverProc = child; return }
+    }
+    try { child.kill() } catch {}
   }
 }
 
@@ -142,7 +166,7 @@ function createWindow() {
   win.setAlwaysOnTop(settings.alwaysOnTop, 'floating')
   win.setIgnoreMouseEvents(settings.clickThrough, { forward: true })
   placeWindow()
-  win.loadURL(liveUrl())
+  // handlers first: the first load may finish (or fail) before a later line would have run
   // drag anywhere on the character; no UI in pet mode (re-applied after every reload)
   let navigations = 0
   win.webContents.on('did-finish-load', () => {
@@ -153,7 +177,7 @@ function createWindow() {
   win.webContents.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return
     if (navigations++ >= 2) {
-      dialog.showErrorBox('形象页没有起来', `页面来自 http://127.0.0.1:${PORT}，本地服务没能启动。\n\n请确认已安装 Node.js，然后右键托盘图标 →「重新加载」。`)
+      warn('形象页没有起来', `页面来自 http://127.0.0.1:${PORT}，本地服务没能启动。\n\n请确认已安装 Node.js，然后右键托盘图标 →「重新加载」。`)
       return
     }
     loadLive()
@@ -162,6 +186,7 @@ function createWindow() {
   win.on('close', (e) => {
     if (!quitting) { e.preventDefault(); win.hide() }
   })
+  loadLive()
 }
 
 function apply(partial, reload = true) {
@@ -174,7 +199,14 @@ function apply(partial, reload = true) {
 /** the page is served by the local server: bring it back before a reload if it went away */
 async function loadLive() {
   if (!win) return
-  if (!(await portOpen())) await ensureServer()
+  if (await portOpen()) {
+    if (!(await ourServer())) {
+      warn(`端口 ${PORT} 被别的程序占用了`, '形象页要用 127.0.0.1:5173，可能被 Vite 之类的开发服务器占了。\n\n关掉占用的程序，然后右键托盘图标 →「重新加载」。')
+      return
+    }
+  } else {
+    await ensureServer()
+  }
   win.loadURL(liveUrl())
 }
 
