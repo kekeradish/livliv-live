@@ -2,6 +2,22 @@
 
 基于 [LivLiv Player](https://github.com/livliv-dev/player)（Apache-2.0）的二次修改：把网页角色播放器做成一个适合直播的**透明虚拟形象工具**——摄像头跟脸、麦克风口型、切换角色与表情，OBS 直接采集，不用绿幕、不用裁窗。
 
+## 截图
+
+直播控制台：选角色、表情、背景，复制开播地址或直接开播（角色 Nana / `d03ft`）。
+
+![直播控制台](docs/console.png)
+
+透明形象窗叠在画面上的效果——左侧留给游戏或幻灯片，右侧是形象，OBS 里勾「允许透明度」即可（角色 Kujira Q / `p02`）。
+
+![透明形象叠加](docs/overlay.png)
+
+角色墙：21 个精选角色，点一个进入控制台。
+
+![角色墙](docs/gallery.png)
+
+截图里出现的角色按 [characters/CREDITS.md](characters/CREDITS.md) 署名，许可说明见文末。
+
 ## 能做什么
 
 - 自己的角色：角色目录里放 `.vrm`（VRoid 等）或一张张嘴/闭嘴的 PNG 图片，控制台和托盘里直接选
@@ -127,6 +143,7 @@ vendor/              本地化的前端依赖（MediaPipe、three.js、three-vrm
 src/                 播放器源码
 example/             示例页与直播页
 desktop/             Electron 透明窗口、托盘、内置静态服务
+docs/                README 用的截图
 release/             免安装 exe 与解包目录（构建产物，不进 Git）
 serve.mjs            本地静态服务器（源码运行时）
 直播形象.cmd          启动形象窗
