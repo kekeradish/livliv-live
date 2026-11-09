@@ -1,169 +1,100 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="media/livliv-player-wordmark-white.svg">
-    <img alt="LivLiv Player" src="media/livliv-player-wordmark-2000.png" width="360">
-  </picture>
-</p>
+# LivLiv 直播形象
 
-<p align="center">
-  A lightweight 2.5D character player for the web, with lip sync and webcam face tracking. A few lines of code put a character in a page, a stream overlay or an app.<br>
-  Comes with 21 featured characters in different styles, ready to use.
-</p>
+基于 [LivLiv Player](https://github.com/livliv-dev/player)（Apache-2.0）的二次修改：把网页角色播放器做成一个适合直播的**透明虚拟形象工具**——摄像头跟脸、麦克风口型、切换角色与表情，OBS 直接采集，不用绿幕、不用裁窗。
 
-<p align="center"><b>English</b> · <a href="README.zh-CN.md">中文</a> · <a href="README.ja.md">日本語</a> · <a href="README.vi.md">Tiếng Việt</a></p>
+## 能做什么
 
-<p align="center"><img src="media/demo.gif" alt="Featured characters breathing, blinking, turning their heads and talking" width="720"></p>
+- 透明、无边框、无 UI 的形象窗口；OBS 窗口采集勾「允许透明度」即为真透明叠加
+- 摄像头面部追踪：转头、点头、歪头、眨眼、眼神、嘴型、微笑
+- 麦克风实时口型；摄像头被别的程序占用时自动重试并提示
+- 21 个精选角色，托盘里随时切换角色、表情、大小、置顶、鼠标穿透
+- 直播控制台：选角色/表情/背景（透明、深色、棋盘、绿幕、任意色）、页面层隐藏 LivLiv 角标、复制 OBS 浏览器源地址
+- 直播页支持 URL 参数，方便 OBS 或 iframe 直接引用
 
-- WebGL2, no dependencies, about 30 KB gzipped for the core
-- Lip sync (microphone, audio, video) and webcam face tracking (MediaPipe), both in the browser, imported only when you need them
-- Plays LivLiv, VRM and PNGTuber characters through the same API
-- 21 featured characters in [`characters/`](characters/), ready to use
+## 快速开始
 
-## Try it
+已经装好 Node.js 的前提下：
 
-- **Online**: the examples run on [livliv-dev.github.io/player](https://livliv-dev.github.io/player/).
-- **Here**: `npm install && npm run build`, serve this folder with any static server and open `/example/demo.html`
-  (expressions, actions, microphone, camera; `?model=../characters/<id>/` picks another character).
-  `/example/png.html` and `/example/vrm.html` show a PNGTuber and a VRM.
-- **On livliv.ai**: each character's page there plays it with the same renderer. Start at
-  [livliv.ai/discover](https://livliv.ai/discover).
+1. 双击 **`直播形象.cmd`**（第一次会自动安装 Electron，需要几分钟）。
+   - 本地服务会自动起在 `http://127.0.0.1:5173`
+   - 右下角出现形象窗；托盘图标里可以换角色、表情、开关摄像头/麦克风、调大小
+2. OBS：来源 `+` → **窗口采集** → 窗口选「LivLiv Live · 角色名」→ 采集方式选「Windows 10 (1903 及以上)」→ 勾「允许透明度」→ 右键来源 → 变换 → 适应屏幕
+3. 想先调参数：双击 **`启动直播浏览器.cmd`** 打开直播控制台（这个 Chrome 配置关掉了后台节流，窗口被挡住也会继续渲染）
 
-## Use it in your page
+手动启动服务（可选）：`node serve.mjs 5173`，然后打开 `http://127.0.0.1:5173/example/live-console.html`。
+
+## 页面
+
+| 页面 | 用途 |
+|---|---|
+| `/example/live-console.html` | 直播控制台（推荐入口）：选角色、表情、背景、摄像头/麦克风，生成开播地址 |
+| `/example/live.html` | 干净的直播页，给 OBS 或 iframe 用 |
+| `/example/gallery.html` | 21 个角色的角色墙（点一个进入控制台） |
+| `/example/demo.html` | 播放器演示：表情、动作、麦克风、摄像头，打开自己的 `.livliv` / VRM / PNG 文件 |
+
+## 直播页参数
+
+例：`http://127.0.0.1:5173/example/live.html?model=p02&bg=transparent&mark=0&cam=1&mic=1`
+
+| 参数 | 说明 |
+|---|---|
+| `model=<id 或 路径>` | 角色 id（如 `p02`）或模型文件夹 / `.livliv` 地址；默认 `d03ft` |
+| `bg=transparent\|dark\|checker\|#rrggbb` | 背景；默认透明，`#00ff00` 可配合 OBS 色度键 |
+| `cam=1`、`mirror=0\|1`、`smooth=0..1`、`follow=0..2` | 摄像头面捕与手感 |
+| `mic=1` | 麦克风实时口型 |
+| `expr=<id>` | 固定一个表情（如 `smile`），与追踪叠加 |
+| `mark=0` | 页面层隐藏角色右下角 LivLiv 角标（不改角色文件，署名义务仍在） |
+| `cursor=0` | 隐藏鼠标指针 |
+
+按 `F` 全屏（形象窗模式除外）。
+
+## OBS 的三种用法
+
+1. **窗口采集（推荐，带面捕）**：采「直播形象」窗口，勾「允许透明度」。真透明、无需绿幕；OBS 里可以随意缩放、裁切、加滤镜。
+2. **浏览器源（无追踪）**：来源选「浏览器」，粘贴 `live.html?bg=transparent&mark=0&model=...`。原生透明、不进窗口采集，但浏览器源拿不到摄像头和麦克风，只适合固定形象。
+3. **绿幕（备选）**：直播页用 `bg=%2300ff00`，OBS 里加「色度键」。适合不依赖 alpha 的场景，头发边缘会有轻微绿边。
+
+## 摄像头与网络
+
+- **摄像头同一时间只能被一个程序使用。** OBS 里不要加「视频采集设备」；浏览器里也不要同时开摄像头预览，否则形象窗会拿不到设备。
+- 被占用时，形象窗底部会显示提示并每 3 秒自动重试；对方释放后会自动接上，不用重启。
+- 面捕依赖 MediaPipe：首次启动会从 jsDelivr 和 Google 下载运行库与人脸模型（约 17 MB，之后走浏览器缓存），运行时会向 Google 发送使用统计。**目前尚未本地化**，离线环境下面捕会起不来。
+
+## 相对上游的改动
+
+- 新增 `example/live.html`、`example/live-console.html`
+- 新增 `desktop/`：Electron 透明窗口 + 托盘；`直播形象.cmd` 一键启动
+- 新增 `serve.mjs`：零依赖静态服务器；`启动直播浏览器.cmd` 专用 Chrome 配置
+- `example/gallery.html`、`example/demo.html` 增加「直播控制台」入口
+- 隐藏角标仅在页面层（`mark=0`），`characters/` 里的角色文件未做任何修改
+
+## 目录
+
+```
+characters/          21 个角色（模型、贴图、许可）
+dist/                构建产物（已提交，克隆即可运行）
+src/                 播放器源码
+example/             示例页与直播页
+desktop/             Electron 透明窗口与托盘
+serve.mjs            本地静态服务器
+直播形象.cmd          启动形象窗
+启动直播浏览器.cmd     启动控制台（独立 Chrome 配置）
+```
+
+## 构建（改源码时）
 
 ```sh
-npm install @livliv-dev/player
-```
-
-```js
-import { Player } from '@livliv-dev/player'
-
-const player = new Player(document.querySelector('canvas'))
-await player.load('characters/k01/')   // a folder with model.json and textures/, or a .livliv file
-
-player.setExpression('smile')          // ids are in player.expressions
-player.act('nod')
-player.params.mouthOpen = 0.6          // 0..1
-```
-
-Lip sync and face tracking:
-
-```js
-import { createSpeech } from '@livliv-dev/player/voice'
-import { startFaceTracking } from '@livliv-dev/player/tracking'   // needs @mediapipe/tasks-vision
-
-const speech = createSpeech(player)
-button.onclick = () => { speech.unlock(); speech.say('/reply.mp3') }
-
-await startFaceTracking(player)
-```
-
-A VRM or a PNGTuber, on the same API:
-
-```js
-import { BodyPlayer } from '@livliv-dev/player/body'
-import { VrmBody } from '@livliv-dev/player/vrm'    // needs three and @pixiv/three-vrm
-import { PngBody } from '@livliv-dev/player/png'
-
-const vrm = new BodyPlayer(canvasA, new VrmBody())
-await vrm.load('/avatars/me.vrm')
-const png = new BodyPlayer(canvasB, new PngBody())
-await png.load({ closed: 'me-closed.png', open: 'me-open.png' })
-```
-
-The whole API is in [API.md](API.md): options, params, expressions and actions, drivers, VRM and PNGTuber characters,
-the limits on untrusted files, the model package and the format version. The LivLiv package format (`.livliv`,
-`model.json` v4) is in [FORMAT.md](FORMAT.md), with a JSON Schema in [`schema/`](schema/); packages exported before v4
-are described in [FORMAT-v3.md](FORMAT-v3.md) and still play.
-
-> The npm package is the player alone. The featured characters are in this repository's [`characters/`](characters/): copy
-> the ones you use next to your page, with their licence.
-
-## Featured characters
-
-`characters/` holds 21 characters, ready to `load()`. They carry a small LivLiv mark in the bottom-right corner, which
-the player draws. They are **not** covered by the Apache License. Most were made by LivLiv: use those free for personal, non-commercial projects with credit
-("Characters: LivLiv (livliv.ai)"); don't sell them, use them commercially or train AI models on them. Nana is
-LivLiv's mascot. The terms are in [characters/LICENSE.md](characters/LICENSE.md).
-
-Kujira, Kujira Q and Pen come from other people's work: that licence and that credit don't cover them. Their sources,
-credits and terms are in [characters/CREDITS.md](characters/CREDITS.md).
-
-Each also has a `cover.webp` (512 x 768, about 50 KB), its first frame without the mark. `player.load(source, { poster })`
-shows it on the canvas until the first frame. To have it before any script has run, put it under the canvas with
-`object-fit: contain` and fade the character in over it, as [example/loading.js](example/loading.js) does.
-
-| id | name | id | name | id | name |
-|---|---|---|---|---|---|
-| `k01` | Sena | `d01` | Yui | `v01` | Aster |
-| `k02` | Elio | `d02` | Leo | `v03` | Mira |
-| `char06` | Aoi | `d03` | Nana | `v04` | Kai |
-| `char07` | Sora | `d03ft` | Nana (refined) | `v05` | Lilith |
-| `s01` | Hana | `p01` | Kujira | `v06` | Usa |
-| `q02` | Mochi | `p02` | Kujira Q | `v07` | Stella |
-| `q03` | Kotaro | `p03` | Pen | `w01` | Max |
-
-## Characters of your own
-
-You can bring in a PNGTuber's pictures, or a VRM (drawn with three.js); or make a character of your own from one
-picture on [livliv.ai](https://livliv.ai).
-
-- **A PNGTuber**: two pictures (mouth closed, mouth open), and two more with the eyes closed if you have them.
-- **A VRM**: from VRoid Studio or any tool that exports VRM 0.x or 1.0.
-- **A LivLiv model**: make one from a picture on [livliv.ai](https://livliv.ai), then download its model package from
-  the character's page (**Model package**): a `.livliv` file. Pass it to `load()` as it is (a URL, or the `File`
-  someone picked), or unzipped as a folder. Packages on the free plan carry the LivLiv mark, and the player draws it.
-
-## About the player and the characters
-
-LivLiv Player and the `.livliv` format are LivLiv's own work. They use no Live2D software or Cubism SDK and do not
-read `.moc3` or `.cmo3` files. "Live2D" is a trademark of Live2D Inc.; LivLiv is not affiliated with it.
-
-Making a character on livliv.ai uses AI. The player itself only plays: it calls no AI service and reads only the files
-you point it at. Face tracking runs Google's MediaPipe in the browser, and camera images stay on the device; API.md has
-the networking details.
-
-The featured characters in this repository were made on LivLiv too, also with AI; Kujira, Kujira Q and Pen adapt other
-people's characters ([credits](characters/CREDITS.md)). Refined Nana (`d03ft`) also has
-swinging parts and head-turn keyforms added with LivLiv's own tools.
-
-A package's `meta.author` and `meta.license` record who made it and on what terms: keep them and follow them. When you
-show a character made with LivLiv in public, say that AI was used to make it, and don't present it as hand-drawn or
-hand-rigged.
-
-## Embed without code
-
-```html
-<iframe src="https://livliv.ai/live/k01" width="480" height="640" allow="camera; microphone"
-  style="border:0;background:transparent"></iframe>
-```
-
-The same `/live/<id>` page has a transparent background and works as an OBS Browser Source.
-
-## Develop
-
-```sh
-git clone https://github.com/livliv-dev/player
-cd player
 npm install
-npm run check          # types
-npm run build          # dist/: index.js, tracking.js, voice.js, body.js, png.js, vrm.js (ES modules), chunks/ and types/
-npm test               # unit and fuzz tests (Node 22.18 or newer, no browser)
-npm run test:browser   # every featured character drawn in headless Chromium; once: npx playwright-core install chromium-headless-shell
-npm run test:engines   # a sample on Firefox and WebKit, where WebGL2 starts (a GPU or a software GL); once: npx playwright-core install firefox webkit
+npm run build   # 重新生成 dist/
 ```
 
-`src/runtime/` is the renderer and motion code livliv.ai runs; this repository is published from it. See
-[CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+## 许可与署名（务必阅读）
 
-## Browser support
+- **代码**：Apache License 2.0，见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。本仓库包含对上游代码的修改。
+- **角色**：不属于开源许可，见 [characters/LICENSE.md](characters/LICENSE.md) 与 [characters/CREDITS.md](characters/CREDITS.md)。
+  - 精选角色：个人直播/视频可免费使用（平台广告分成、打赏也算非商业），需署名「角色：LivLiv（livliv.ai）」；不可商用、不可单独分发或出售角色文件、不可用于训练 AI。Nana（`d03`、`d03ft`）是 LivLiv 吉祥物，不能当作你自己或你频道的形象。
+  - Kujira（`p01`）、Kujira Q（`p02`）：采用 CC BY-NC-SA 4.0，需署名「Kujira：上善无形、ZipZipPipe（CC BY-NC-SA 4.0）；模型：LivLiv」；有收入的直播建议改用精选角色。
+  - Pen（`p03`）：LivLiv 不持有也未授予任何权利，请勿使用。
+- 在页面层隐藏角标后，请继续在简介或画面上署名。
 
-WebGL2 and ES2023: Chrome / Edge 97+, Firefox 104+, Safari 15.4+. Tested on current desktop browsers, not yet on phones.
-
-## License
-
-The code is under the [Apache License 2.0](LICENSE) (see also [NOTICE](NOTICE)). The featured characters have their
-own licence, [characters/LICENSE.md](characters/LICENSE.md). Neither licence covers the LivLiv name and logos.
-
-## Thanks
-
-Thanks to 上善无形, ZipZipPipe and 贱兔死顺盖, whose characters Kujira, Kujira Q and Pen are based on: see [characters/CREDITS.md](characters/CREDITS.md).
+LivLiv 的名称与标志不在任何开源许可范围内；本项目与 LivLiv 官方无隶属关系，不代表其认可。
